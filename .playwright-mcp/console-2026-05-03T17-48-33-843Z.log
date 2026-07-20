@@ -1,0 +1,10 @@
+[     102ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://127.0.0.1:3000/_next/static/chunks/08a9ngik9dfa7.css:0
+[     261ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://127.0.0.1:3000/_next/static/chunks/0f9dapk6~m7mm.js:0
+[     476ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://127.0.0.1:3000/_next/static/chunks/0do4n36z68f1e.js:0
+[     478ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://127.0.0.1:3000/_next/static/chunks/0c8hz5yy_1t75.js:0
+[     522ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://127.0.0.1:3000/_next/static/chunks/0~r8-tmsp~0cj.js:0
+[     649ms] ChunkLoadError: Failed to load chunk /_next/static/chunks/0do4n36z68f1e.js from module 64893
+    at http://127.0.0.1:3000/_next/static/chunks/turbopack-0lrunn5dsnbh7.js:1:6129
+[    4056ms] [WARNING] The resource http://127.0.0.1:3000/_next/static/media/70bc3e132a0a741e-s.p.1409xf.ylxg8g.woff2 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally. @ http://127.0.0.1:3000/ide:0
+[    4057ms] [WARNING] The resource http://127.0.0.1:3000/_next/static/media/0c89a48fa5027cee-s.p.0rd3rjvnnhw7n.woff2 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally. @ http://127.0.0.1:3000/ide:0
+[    4057ms] [WARNING] The resource http://127.0.0.1:3000/_next/static/media/5c285b27cdda1fe8-s.p.0yo6-5yoeeudq.woff2 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally. @ http://127.0.0.1:3000/ide:0

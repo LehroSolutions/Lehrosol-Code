@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lehro Solutions — Mesh Gradient Poster</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@600;800&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    width: 1080px;
+    height: 1080px;
+    font-family: 'Inter', system-ui, sans-serif;
+    background: #0A0A0F;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .bg {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+  }
+
+  .bg::before,
+  .bg::after {
+    content: '';
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(120px);
+    opacity: 0.6;
+  }
+
+  .bg::before {
+    width: 600px;
+    height: 600px;
+    background: radial-gradient(circle, #2563EB, transparent 70%);
+    top: -10%;
+    left: -5%;
+    transform: translate(-20%, -20%);
+  }
+
+  .bg::after {
+    width: 500px;
+    height: 500px;
+    background: radial-gradient(circle, #7C3AED, transparent 70%);
+    bottom: -10%;
+    right: -5%;
+    transform: translate(20%, 20%);
+  }
+
+  .bg .orb3 {
+    position: absolute;
+    width: 400px;
+    height: 400px;
+    background: radial-gradient(circle, #06B6D4, transparent 70%);
+    top: 40%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    border-radius: 50%;
+    filter: blur(100px);
+    opacity: 0.35;
+  }
+
+  .content {
+    position: relative;
+    z-index: 1;
+    text-align: center;
+    padding: 80px;
+  }
+
+  .tag {
+    display: inline-block;
+    padding: 8px 24px;
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 999px;
+    color: #A1A1AA;
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    margin-bottom: 48px;
+    backdrop-filter: blur(8px);
+    background: rgba(255,255,255,0.05);
+  }
+
+  h1 {
+    color: #FAFAFA;
+    font-size: 64px;
+    font-weight: 800;
+    line-height: 1.1;
+    margin-bottom: 24px;
+    max-width: 700px;
+  }
+
+  p {
+    color: #A1A1AA;
+    font-size: 22px;
+    line-height: 1.5;
+    max-width: 520px;
+    margin: 0 auto;
+  }
+
+  .brand {
+    position: absolute;
+    bottom: 60px;
+    left: 50%;
+    transform: translateX(-50%);
+    color: #FAFAFA;
+    font-size: 18px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    opacity: 0.7;
+  }
+
+  .brand span {
+    color: #2563EB;
+  }
+</style>
+</head>
+<body>
+  <div class="bg">
+    <div class="orb3"></div>
+  </div>
+  <div class="content">
+    <div class="tag">Lehro Solutions</div>
+    <h1>Integrate anything. Ship everything.</h1>
+    <p>Your tagline or call-to-action goes here. This is a mesh gradient poster template.</p>
+  </div>
+  <div class="brand"><span>Lehro</span>&nbsp;Solutions</div>
+</body>
+</html>

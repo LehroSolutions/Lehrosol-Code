@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lehro Solutions — Geometric Bold Poster</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@700;900&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    width: 1080px;
+    height: 1080px;
+    font-family: 'Inter', system-ui, sans-serif;
+    background: #0A0A0F;
+    overflow: hidden;
+    display: flex;
+    padding: 80px;
+  }
+
+  .shape {
+    position: absolute;
+    background: transparent;
+  }
+
+  .shape-circle {
+    width: 300px;
+    height: 300px;
+    border: 3px solid #2563EB;
+    border-radius: 50%;
+    top: 10%;
+    right: 5%;
+    opacity: 0.4;
+  }
+
+  .shape-rect {
+    width: 200px;
+    height: 200px;
+    border: 3px solid #7C3AED;
+    bottom: 15%;
+    left: 8%;
+    opacity: 0.3;
+    transform: rotate(15deg);
+  }
+
+  .shape-triangle {
+    width: 0;
+    height: 0;
+    border-left: 100px solid transparent;
+    border-right: 100px solid transparent;
+    border-bottom: 173px solid rgba(6, 182, 212, 0.2);
+    top: 55%;
+    right: 15%;
+  }
+
+  .accent-bar {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 6px;
+    height: 100%;
+    background: linear-gradient(to bottom, #2563EB, #7C3AED, #06B6D4);
+  }
+
+  .content {
+    width: 55%;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    position: relative;
+    z-index: 1;
+  }
+
+  .tag {
+    color: #2563EB;
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    margin-bottom: 32px;
+  }
+
+  h1 {
+    color: #FAFAFA;
+    font-size: 56px;
+    font-weight: 900;
+    line-height: 1.05;
+    margin-bottom: 28px;
+  }
+
+  p {
+    color: #A1A1AA;
+    font-size: 20px;
+    line-height: 1.5;
+  }
+
+  .brand {
+    position: absolute;
+    bottom: 60px;
+    left: 120px;
+    color: #FAFAFA;
+    font-size: 16px;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    opacity: 0.6;
+  }
+
+  .brand span { color: #2563EB; }
+</style>
+</head>
+<body>
+  <div class="accent-bar"></div>
+  <div class="shape shape-circle"></div>
+  <div class="shape shape-rect"></div>
+  <div class="shape shape-triangle"></div>
+  <div class="content">
+    <div class="tag">NEW FEATURE</div>
+    <h1>LehroForge API Adapter</h1>
+    <p>Connect to any service. Stripe, GitHub, OpenAI — adapters auto-generate from specs.</p>
+  </div>
+  <div class="brand"><span>Lehro</span>&nbsp;Solutions</div>
+</body>
+</html>

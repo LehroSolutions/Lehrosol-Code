@@ -1,0 +1,22 @@
+agents:
+  architect:
+    provider: qwen
+    model: qwen3.6-plus-preview
+  coder:
+    provider: openai
+    model: gpt-4.1
+  frontend-dev:
+    provider: claude
+    model: claude-sonnet-4-20250514
+  backend-dev:
+    provider: kimi
+    model: kimi-k2
+  reviewer:
+    provider: glm
+    model: glm-4.5
+  tester:
+    provider: github-copilot
+    model: gpt-4.1
+  deployer:
+    provider: openai
+    model: gpt-4.1-mini

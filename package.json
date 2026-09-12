@@ -1,0 +1,35 @@
+{
+  "name": "lehrosol-code",
+  "productName": "Lehrosol Code",
+  "version": "2.4.0",
+  "description": "Lehrosol Code — the agentic engineering IDE for local models. A GUI cockpit over the LehroSol CLI: model vault, agent missions, live system graph, and an editor with AI suggestions, all running against GGUFs on your own drive.",
+  "license": "GPL-3.0-or-later",
+  "author": "Lehro Solutions",
+  "main": "electron/main.js",
+  "packageManager": "pnpm@11.15.1",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "node scripts/start.js",
+    "test": "node --test \"test-app/*.test.js\"",
+    "dist": "electron-builder --win"
+  },
+  "devDependencies": {
+    "electron": "^31.3.0",
+    "electron-builder": "^24.13.3"
+  },
+  "build": {
+    "appId": "solutions.lehro.lehrosolcode",
+    "productName": "Lehrosol Code",
+    "files": [
+      "electron/**",
+      "renderer/**",
+      "package.json"
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "build/icon.ico"
+    }
+  }
+}

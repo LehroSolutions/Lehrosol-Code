@@ -1,0 +1,7 @@
+allowBuilds:
+  electron: true
+# pnpm 11 settings home (the "pnpm" field in package.json is no longer read).
+# Allow Electron's postinstall to download its binary without an
+# approve-builds prompt on fresh installs.
+onlyBuiltDependencies:
+  - electron

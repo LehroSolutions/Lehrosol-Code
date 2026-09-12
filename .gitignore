@@ -1,0 +1,28 @@
+# Dependencies
+node_modules/
+
+# Build output (electron-builder: installers, unpacked app, metadata)
+dist/
+build/*
+!build/icon.ico
+*.exe
+*.blockmap
+builder-debug.yml
+latest.yml
+
+# Git worktrees (agent scratch dirs)
+.worktrees/
+
+# Playwright / smoke artifacts
+.playwright-mcp/
+smoke-test/*.log
+
+# Local env & secrets
+.env
+.env.*
+!.env.example
+
+# Logs & OS junk
+*.log
+.DS_Store
+Thumbs.db

@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Lehrosol Code · Install &amp; Usage Glossary</title>
+<style>
+  :root {
+    --bg: #070b09; --panel: #0b100d; --card: #121a15; --border: #1b2620;
+    --text: #e2ece4; --dim: #8aa093;
+    --green: #35d07a; --amber: #dfa440; --red: #e05e5e; --blue: #61b3ff; --yellow: #e5c07b; --purple: #c491e2;
+    --mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    --sans: 'Inter', -apple-system, 'Segoe UI', sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--sans); line-height: 1.65; font-size: 15.5px; }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 32px 24px 80px; }
+  a { color: var(--green); text-decoration: none; } a:hover { text-decoration: underline; }
+  header.hero { border: 1px solid var(--border); background: linear-gradient(135deg, #0b100d 0%, #0e1a12 60%, #0b100d 100%); border-radius: 16px; padding: 32px 28px; margin-bottom: 28px; }
+  .eyebrow { color: var(--dim); text-transform: uppercase; letter-spacing: .12em; font-size: 12px; margin: 0 0 8px; }
+  h1 { margin: 0; font-size: 30px; color: var(--green); }
+  .sub { color: var(--dim); margin-top: 8px; max-width: 820px; }
+  nav.toc { border: 1px solid var(--border); background: var(--panel); border-radius: 12px; padding: 18px 22px; margin-bottom: 32px; }
+  nav.toc b { color: var(--green); }
+  nav.toc ol { margin: 8px 0 0; padding-left: 22px; columns: 2; }
+  h2 { color: var(--green); font-size: 22px; border-bottom: 1px solid var(--border); padding-bottom: 8px; margin-top: 44px; }
+  h3 { color: var(--blue); font-size: 17px; margin-bottom: 4px; }
+  h4 { color: var(--yellow); margin: 26px 0 6px; font-size: 15px; }
+  table { width: 100%; border-collapse: collapse; margin: 14px 0; }
+  th, td { border: 1px solid var(--border); padding: 9px 12px; text-align: left; vertical-align: top; }
+  th { background: var(--card); color: var(--green); font-size: 13.5px; }
+  tr:nth-child(even) td { background: rgba(18, 26, 21, .5); }
+  code { font-family: var(--mono); background: #0d1410; border: 1px solid var(--border); border-radius: 5px; padding: 1px 6px; font-size: .88em; color: #a7e8c3; }
+  pre { background: #0a0f0c; border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; overflow-x: auto; }
+  pre code { background: none; border: none; padding: 0; color: #b9f0cf; font-size: 13px; line-height: 1.55; }
+  .term { border: 1px solid var(--border); background: var(--card); border-radius: 10px; padding: 14px 18px; margin: 12px 0; }
+  .term b.t { color: var(--green); font-size: 16px; }
+  .term .use { color: var(--dim); margin-top: 6px; }
+  .callout { border-left: 3px solid var(--amber); background: rgba(223,164,64,.07); border-radius: 0 10px 10px 0; padding: 12px 16px; margin: 16px 0; }
+  .callout.red { border-left-color: var(--red); background: rgba(224,94,94,.07); }
+  .callout.green { border-left-color: var(--green); background: rgba(53,208,122,.07); }
+  footer { margin-top: 56px; padding-top: 16px; border-top: 1px solid var(--border); color: var(--dim); font-size: 13px; }
+  kbd { font-family: var(--mono); background: var(--card); border: 1px solid var(--border); border-bottom-width: 2px; border-radius: 5px; padding: 0 6px; font-size: 12px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="hero">
+  <p class="eyebrow">Lehrosol Code v2.4.0 · Documentation</p>
+  <h1>Install &amp; Usage Glossary</h1>
+  <p class="sub">A dictionary-style reference for <b>Lehrosol Code</b> — the agentic engineering IDE for local models — and its deep integration with the <b>LehroSol CLI</b>. Every entry tells you what a term means, which control or command exercises it, and how to get it working. If you know what you want but not what it is called, start at the letter.</p>
+</header>
+
+<nav class="toc">
+  <b>On this page</b>
+  <ol>
+    <li><a href="#what">What Lehrosol Code is</a></li>
+    <li><a href="#install-cli">Install: the LehroSol CLI</a></li>
+    <li><a href="#install-app">Install: the Lehrosol Code app</a></li>
+    <li><a href="#installer">Package a Windows installer</a></li>
+    <li><a href="#pairing">Pairing the app with the CLI</a></li>
+    <li><a href="#controls">Glossary: every control</a></li>
+    <li><a href="#concepts">Glossary: every concept</a></li>
+    <li><a href="#cli-verbs">CLI verbs the app calls</a></li>
+    <li><a href="#troubleshooting">Troubleshooting</a></li>
+    <li><a href="#license">License &amp; honesty notes</a></li>
+  </ol>
+</nav>
+
+<h2 id="what">1 · What Lehrosol Code is</h2>
+<p>Lehrosol Code is an <b>Electron desktop app</b> deeply integrated with the LehroSol CLI: the GUI drives the CLI, the CLI feeds the GUI, and they share one model vault, one engine, and one state home (<code>~/.lehro</code>). Zero-setup model discovery, one-click engines, HELIX agent missions, a model test bench, ENGRAM memory, and a live system graph — all running on GGUFs from your own drive. No cloud, no demo content: everything on screen is real.</p>
+<table>
+  <tr><th>Layer</th><th>Mechanism</th></tr>
+  <tr><td>Actions</td><td>The app shells out to <code>lehrosol … --json</code> (vault, serve, loop, engrams, gui)</td></tr>
+  <tr><td>Awareness</td><td>It reads the CLI's own state files: <code>~/.lehro/serve.json</code>, <code>~/.lehro/config.json</code></td></tr>
+  <tr><td>Engine</td><td>It talks HTTP to your llama-server: <code>/v1/models</code> pings, <code>/v1/chat/completions</code> benchmarks. Poll <code>/health</code> (unauthenticated) for status without 401 spam.</td></tr>
+  <tr><td>Discovery</td><td>A native scanner finds GGUFs on your drives with no config, then registers those folders into the CLI vault (<code>vault add-root</code>) so both tools share one library</td></tr>
+  <tr><td>Sync (v2.4)</td><td>The bridge handshakes the CLI version (<code>--version</code>) and speaks the CLI v3.2 quick lane: <code>up</code>, <code>arena</code>, <code>scan</code>, <code>engrams</code>, <code>recommend</code>, <code>doctor</code>, <code>adapters</code>, <code>modes</code></td></tr>
+</table>
+
+<h2 id="install-cli">2 · Install: the LehroSol CLI (prerequisite)</h2>
+<p>The app is a cockpit <i>over</i> the CLI — install the CLI first. The core is zero-dependency (Node builtins only), so any path works with no build step:</p>
+<table>
+  <tr><th>Path</th><th>Command</th><th>When to use</th></tr>
+  <tr><td>npm (global)</td><td><code>npm i -g lehrosol-cli</code></td><td>You have Node.js 20+ and npm — the standard path</td></tr>
+  <tr><td>Bun</td><td><code>bun install -g lehrosol-cli</code></td><td>You prefer Bun</td></tr>
+  <tr><td>From source</td><td><code>git clone https://github.com/LehroSolutions/lehrosol-cli.git</code></td><td>Contributors; the app can point at <code>bin\lehrosol.js</code> directly</td></tr>
+</table>
+<pre><code># Verify the CLI is healthy:
+lehrosol doctor        # read-only health check — never modifies files
+lehrosol onboard       # guided first-run: doctor → adapters → recommendation → rehearsal mission</code></pre>
+
+<h2 id="install-app">3 · Install: the Lehrosol Code app (dev mode)</h2>
+<p><b>Prerequisites:</b> Node.js <b>22+</b> (LTS recommended) and pnpm <b>11</b> (pinned via <code>packageManager</code> → <code>pnpm@11.15.1</code>). No native modules — Microsoft Build Tools are <b>not</b> required.</p>
+<pre><code>cd "D:\lehrosol code"
+corepack enable pnpm                 # one-time; honors the pinned pnpm 11.15.1
+# Alternative if Corepack is unavailable: npm i -g pnpm@latest-11
+pnpm install                         # downloads Electron (one-time, needs internet)
+pnpm start                           # launch the desktop app
+pnpm test                            # node --test suite for the bridge &amp; cockpit
+pnpm dist                            # build the Windows NSIS installer</code></pre>
+<div class="callout green"><b>Why these settings exist:</b> <code>.npmrc</code> sets <code>node-linker=hoisted</code> so electron-builder can package the flat <code>node_modules</code> (it cannot follow pnpm's default symlinked tree), and <code>pnpm-workspace.yaml</code> pre-approves Electron's postinstall (<code>onlyBuiltDependencies</code>) so fresh installs never hit an <code>approve-builds</code> prompt. The first <code>pnpm install</code> creates <code>pnpm-lock.yaml</code> — commit it.</div>
+<div class="callout"><b><code>pnpm start</code> under the hood:</b> it launches Electron through <code>scripts/start.js</code>, which strips pnpm-injected <code>NODE_OPTIONS</code> (e.g. <code>--use-system-ca</code>) that Electron rejects with exit code 9.</div>
+
+<h2 id="installer">4 · Package a Windows installer</h2>
+<p><code>pnpm dist</code> runs <b>electron-builder</b> (NSIS target, <code>appId solutions.lehro.lehrosolcode</code>) and produces <code>Lehrosol Code Setup &lt;version&gt;.exe</code> plus update metadata (<code>latest.yml</code>, <code>.blockmap</code>) in <code>dist/</code>. The icon comes from <code>build/icon.ico</code>. The <code>build.files</code> list ships only <code>electron/**</code>, <code>renderer/**</code>, and <code>package.json</code> — the packaged app is ~90&nbsp;KB of source; Electron itself is the only heavyweight.</p>
+
+<h2 id="pairing">5 · Pairing the app with the CLI</h2>
+<table>
+  <tr><th>Situation</th><th>Fix</th></tr>
+  <tr><td>CLI not on <code>PATH</code></td><td>Settings → <b>Locate…</b> → pick <code>…\lehrosol-cli\bin\lehrosol.js</code> (persisted), or set <code>$env:LEHROSOL_BIN</code></td></tr>
+  <tr><td>CLI version drift</td><td>The bridge handshakes <code>lehrosol --version</code> at startup; mismatched quick-lane verbs degrade gracefully — update the CLI</td></tr>
+  <tr><td>Vault empty on first launch</td><td>The app auto-scans your drives (Jan, LM Studio, HuggingFace cache, <code>D:\AI Models</code>-style folders, <code>~/models</code>), rates each model against your real RAM (GREAT / TIGHT / NO FIT), and one click registers the folders into the CLI vault</td></tr>
+  <tr><td>Auto-start engine</td><td>On by default in Settings — the app resumes your last served model at launch, so your local AI is simply <i>on</i></td></tr>
+</table>
+
+<h2 id="controls">6 · Glossary: every control in the cockpit</h2>
+
+<div class="term"><b class="t">Agent Stream</b><div>Live mission cards — each ask-bar prompt is a real <code>loop run</code> with phase badges (<b>architect → scout → builder → reviewer → scribe</b>), a streamed output tail, and a cancel button.</div></div>
+<div class="term"><b class="t">Ask bar <span class="pill">⌘ /</span></b><div>Runs a HELIX mission from a plain-language goal. <b>Live writes</b> sends <code>--dryRun=false</code>; dry run is the default, so nothing is modified until you opt in.</div></div>
+<div class="term"><b class="t">AI Suggestion</b><div>Your local model rewrites the open file; you get a diff card and <b>Apply</b> writes it to disk. No cloud round-trip.</div></div>
+<div class="term"><b class="t">Command palette <span class="pill">⌘ K</span></b><div>Quick access to Quick Start, Rescan Drives, Test Bench, and every other cockpit action.</div></div>
+<div class="term"><b class="t">Engine card / pill</b><div>Engine health at a glance plus one-click <b>Start</b> (best-fit model) and <b>Stop</b>. Health pings use llama-server's unauthenticated <code>/health</code> endpoint; benchmark calls carry <code>Authorization: Bearer &lt;key&gt;</code>.</div></div>
+<div class="term"><b class="t">Files / Search</b><div>Project editing and project-wide search over your working folder — the same folder the CLI loop tools operate on.</div></div>
+<div class="term"><b class="t">Memory view</b><div>Browses ENGRAM — the distilled lessons LehroSol has learned about this project — and routes to the Distillery actions.</div></div>
+<div class="term"><b class="t">Skills panel</b><div>Lists mission playbooks (60+ <code>SKILL.md</code> playbooks ship in <code>skills/</code>) the agent can be pointed at.</div></div>
+<div class="term"><b class="t">Settings</b><div>Ports, API keys, auto-start engine, and the CLI path (<b>Locate…</b>). Keys live in the CLI's own config, not duplicated.</div></div>
+<div class="term"><b class="t">System Graph</b><div>Live topology: <b>Vault · llama-server · adapter · loop · ENGRAM · web plane</b>. Click nodes to act; one JSON snapshot every 5&nbsp;s, pausable from the graph header.</div></div>
+<div class="term"><b class="t">Terminal / Events / Output / Engine log</b><div>A real shell, a real event feed, and streamed mission output — including the engine's stderr relay (llama-server log lines may appear here; that is the host app surfacing the log, not a CLI failure).</div></div>
+<div class="term"><b class="t">Test Bench <span class="pill">⚖</span></b><div>Pick a model, pick a preset (code / reasoning / summarize / creative / custom), hit <b>Run</b>: the app serves the model if needed, sends the prompt, and records latency, tokens, and tok/s with the full output. <b>Run on all GREAT models</b> races them head-to-head with a leaderboard. Benchmarks carry a background-CPU-load guard — a runaway process can make a 9B model look 6× slower.</div></div>
+<div class="term"><b class="t">Vault <span class="pill">▣</span></b><div>Vault models or native scan results; <b>Rescan drives</b>; add folders to the CLI vault; serve or test any model with one click.</div></div>
+<div class="term"><b class="t">+ New Agent</b><div>Serve any GGUF via <code>lehrosol vault serve --model … --port … --apiKey …</code> — a new agent identity backed by its own engine instance.</div></div>
+
+<h2 id="concepts">7 · Glossary: every concept</h2>
+
+<div class="term"><b class="t">Adapter</b><div>An agent-CLI integration (Claude Code, Codex, OpenCode, Grok, …) the loop can drive; the app shows readiness from <code>lehrosol adapters --json</code>.</div></div>
+<div class="term"><b class="t">arena</b><div>CLI quick-lane race: same prompt across your best local models, tok/s scoreboard with a background-CPU-load validity guard. The Test Bench is the GUI twin of this verb.</div></div>
+<div class="term"><b class="t">dry run</b><div>The default safety mode: the agent plans and calls tools but writes nothing. Live execution is always an explicit opt-in (<code>--dryRun=false</code> / the <b>Live writes</b> toggle).</div></div>
+<div class="term"><b class="t">ENGRAM</b><div>Distilled memory: tiny, project-scoped lessons distilled from old sessions (<code>lehrosol compact</code>) and reused by future runs as field notes. Browse with <code>engrams --json</code> or the Memory view.</div></div>
+<div class="term"><b class="t">GGUF / quant</b><div>The single-file local-model format (and its compression level, e.g. <code>Q4_K_M</code>). Prefer Q4_K_M on CPU-only hosts: exotic low-bit quants can be ~2.4× slower per token on AVX2-only CPUs.</div></div>
+<div class="term"><b class="t">HELIX mission</b><div>Goal → plan (phase graph: recon → implement → verify, optional harden/document) → execute → verify (Score Agent gate) → adapt (retry → replan → escalate) → report. The Ask bar runs one.</div></div>
+<div class="term"><b class="t">llama-server</b><div>The llama.cpp OpenAI-compatible HTTP server that hosts your model. <code>serve start</code> clamps context to 4096 (Qwen-family native 262k contexts can OOM the KV cache) and pins <code>-ngl 0</code> on integrated-GPU-only machines, where recent builds otherwise auto-enable a slow Vulkan path.</div></div>
+<div class="term"><b class="t">Loop Engine</b><div>The Ralph-style outer loop the app streams: read <code>AGENT.md</code> → run the adapter → grade (Score Agent) → checkpoint → repeat. Premature "done" claims with zero tool activity are challenged and pushed back.</div></div>
+<div class="term"><b class="t">Model Vault</b><div>The shared model library: scan drives, rate fits (GREAT / TIGHT / NO FIT against real <code>os.freemem()</code> with a 0.85 standby-cache margin), add roots, host directly. Shared between the app and the CLI.</div></div>
+<div class="term"><b class="t">Quick lane</b><div>The CLI's one-word commands the app drives: <code>up</code> (zero-to-serving on :7000), <code>arena</code>, <code>ask</code>, <code>code</code>, <code>scan</code>, <code>skills</code>, <code>optimize</code>, <code>missions</code>.</div></div>
+<div class="term"><b class="t">serve.json</b><div><code>~/.lehro/serve.json</code> — the tracked engine state (model, port, API key) both tools read; the app's engine pill and auto-start are built on it.</div></div>
+<div class="term"><b class="t">Score Agent</b><div>The grader inside every loop pass: verifies "done" claims against evidence (changed files, tool activity, verification commands) instead of trusting prose.</div></div>
+<div class="term"><b class="t">System Graph planes</b><div>The graph's nodes map to real subsystems: Vault (models), llama-server (engine), adapter (agent), loop (harness), ENGRAM (memory), web plane (network-capable surfaces).</div></div>
+
+<h2 id="cli-verbs">8 · CLI verbs the app calls</h2>
+<p>For automation outside the GUI, every control maps to a plain CLI invocation — the cockpit is a thin, honest layer over these:</p>
+<table>
+  <tr><th>Control</th><th>What the app actually runs</th></tr>
+  <tr><td>Engine pill → Start</td><td><code>lehrosol up</code> or <code>lehrosol vault serve --model &lt;id&gt; --port 7000 --apiKey &lt;key&gt;</code></td></tr>
+  <tr><td>Vault → Rescan drives</td><td><code>lehrosol scan</code> (+ <code>vault add-root</code> for folders you accept)</td></tr>
+  <tr><td>Test Bench → Run</td><td>serves if needed, then <code>/v1/chat/completions</code> with timing (or <code>lehrosol arena</code> / <code>model-lab</code>)</td></tr>
+  <tr><td>Ask bar (mission)</td><td><code>lehrosol loop run --prompt "…" --agentAdapter &lt;id&gt;</code> (add <code>--dryRun=false</code> for live writes)</td></tr>
+  <tr><td>Memory view</td><td><code>lehrosol engrams --json</code>, distill via <code>lehrosol compact</code></td></tr>
+  <tr><td>Recommendations</td><td><code>lehrosol recommend</code> (hardware-aware model report)</td></tr>
+  <tr><td>Health</td><td><code>lehrosol doctor</code>; engine liveness via <code>/health</code></td></tr>
+</table>
+
+<h2 id="troubleshooting">9 · Troubleshooting</h2>
+<table>
+  <tr><th>Symptom</th><th>Cause &amp; fix</th></tr>
+  <tr><td>Electron exits with code 9 under <code>pnpm start</code></td><td>pnpm injects <code>NODE_OPTIONS</code> Electron rejects — <code>scripts/start.js</code> already strips it; make sure you start via <code>pnpm start</code>, not <code>electron .</code> directly</td></tr>
+  <tr><td>Installers won't package</td><td><code>.npmrc</code> must keep <code>node-linker=hoisted</code>; electron-builder cannot follow pnpm's symlinked tree</td></tr>
+  <tr><td>401 "Invalid API Key" floods in the engine log</td><td>Requests to <code>/v1/*</code> must carry <code>Authorization: Bearer &lt;key from ~/.lehro/serve.json, default 'lehro-local'&gt;</code>; poll <code>/health</code> (unauthenticated) for status instead</td></tr>
+  <tr><td>Engine "not running" though it is</td><td>Keyless <code>/v1/models</code> probes on a key-protected engine look like "not running"; the app probes with the tracked key and flags 401/403 as occupied</td></tr>
+  <tr><td>Benchmarks look impossibly slow</td><td>Check background CPU load first — one runaway process skewed a 9B model 6×; the app's benchmarks sample CPU load and flag skewed readings</td></tr>
+  <tr><td>Model fits but thrashes</td><td>The GREAT/TIGHT/NO FIT rating already includes a 0.85 standby-cache margin; if you force a TIGHT model, expect paging — check <code>vault doctor</code> / <code>recommend</code> for smaller quants</td></tr>
+  <tr><td><code>corepack enable pnpm</code> unavailable</td><td><code>npm i -g pnpm@latest-11</code> — the repo pins pnpm 11 behavior</td></tr>
+</table>
+
+<h2 id="license">10 · License &amp; honesty notes</h2>
+<div class="callout"><b>License:</b> GPL-3.0-or-later · Lehro Solutions.</div>
+<div class="callout red"><b>Honesty note (kept from v2.0.0):</b> earlier docs in this repo (<code>README-IMPLEMENTATION.md</code>) claimed a completed "Project Portal" implementation; that code never existed. The real app is <code>electron/</code> + <code>renderer/</code> here. <code>LOGIN.md</code> contained plaintext credentials — rotate that password and delete the file.</div>
+<p>Repo layout for reference: <code>electron/</code> main process, preload, CLI bridge · <code>renderer/</code> UI · <code>test-app/</code> node --test suite + QA harness · <code>runtime/</code> legacy swarm orchestrator CLI (kept) · <code>skills/</code> 60+ playbooks (kept) · <code>config/</code> legacy cloud-oriented configs (superseded by the LehroSol CLI).</p>
+
+<footer>
+  Lehrosol Code · Install &amp; Usage Glossary · generated for v2.4.0 · pair with the CLI's own glossary at <code>lehrosol-cli/docs/19-glossary.html</code> for the full command dictionary.
+</footer>
+
+</div>
+</body>
+</html>

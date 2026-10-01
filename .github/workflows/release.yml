@@ -21,7 +21,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           # electron-builder resolves the version from package.json and needs the
           # full history to derive a changelog/version string.

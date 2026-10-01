@@ -1,0 +1,70 @@
+# Normalize line endings: check out LF everywhere in the working tree, and
+# keep the repository free of CRLF churn across Windows/macOS/Linux contributors.
+* text=auto eol=lf
+
+# --- Windows build scripts -----------------------------------------------------
+# These are interpreted by cmd.exe, which requires CRLF. Force CRLF on checkout
+# so they run on a clean Windows clone.
+/*.cmd   text eol=crlf
+/*.bat   text eol=crlf
+
+# --- Shell scripts --------------------------------------------------------------
+# Executed by a POSIX shell, so LF is mandatory.
+/*.sh    text eol=lf
+
+# --- Generated build output -----------------------------------------------------
+# Never diffable; keep them out of language statistics and normal diffs.
+/dist/**      linguist-generated=true -diff
+/build/**     linguist-generated=true -diff
+/dist/         binary
+*.exe          binary
+*.blockmap     binary
+latest.yml     linguist-generated=true -diff
+builder-debug.yml linguist-generated=true -diff
+
+# --- Binary assets --------------------------------------------------------------
+*.png     binary
+*.jpg     binary
+*.jpeg    binary
+*.gif     binary
+*.ico     binary
+*.webp    binary
+*.bmp     binary
+*.svg     text
+*.ttf     binary
+*.woff    binary
+*.woff2   binary
+*.mp4     binary
+*.webm    binary
+
+# --- Model weights --------------------------------------------------------------
+# Large binary blobs that must never be line-ending-normalized or diffed.
+*.gguf    binary
+*.bin     binary
+
+# --- Lockfiles and manifests ----------------------------------------------------
+pnpm-lock.yaml linguist-generated=true -diff
+package-lock.json linguist-generated=true -diff
+yarn.lock       linguist-generated=true -diff
+
+# --- Documentation --------------------------------------------------------------
+*.md       text eol=lf
+*.mdx      text eol=lf
+LICENSE    text eol=lf
+NOTICE     text eol=lf
+AUTHORS    text eol=lf
+
+# --- Language-specific defaults -------------------------------------------------
+*.js    text eol=lf
+*.mjs   text eol=lf
+*.cjs   text eol=lf
+*.jsx   text eol=lf
+*.json  text eol=lf
+*.jsonc text eol=lf
+*.yml   text eol=lf
+*.yaml  text eol=lf
+*.html  text eol=lf
+*.css   text eol=lf
+*.py    text eol=lf
+*.ts    text eol=lf
+*.tsx   text eol=lf

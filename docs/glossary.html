@@ -83,7 +83,7 @@
 <p>The app is a cockpit <i>over</i> the CLI — install the CLI first. The core is zero-dependency (Node builtins only), so any path works with no build step:</p>
 <table>
   <tr><th>Path</th><th>Command</th><th>When to use</th></tr>
-  <tr><td>npm (global)</td><td><code>npm i -g lehrosol-cli</code></td><td>You have Node.js 20+ and npm — the standard path</td></tr>
+  <tr><td>npm (global)</td><td><code>npm i -g lehrosol-cli</code></td><td>You have Node.js 22+ and npm — the standard path</td></tr>
   <tr><td>Bun</td><td><code>bun install -g lehrosol-cli</code></td><td>You prefer Bun</td></tr>
   <tr><td>From source</td><td><code>git clone https://github.com/LehroSolutions/lehrosol-cli.git</code></td><td>Contributors; the app can point at <code>bin\lehrosol.js</code> directly</td></tr>
 </table>
@@ -124,7 +124,7 @@ pnpm dist                            # build the Windows NSIS installer</code></
 <div class="term"><b class="t">Engine card / pill</b><div>Engine health at a glance plus one-click <b>Start</b> (best-fit model) and <b>Stop</b>. Health pings use llama-server's unauthenticated <code>/health</code> endpoint; benchmark calls carry <code>Authorization: Bearer &lt;key&gt;</code>.</div></div>
 <div class="term"><b class="t">Files / Search</b><div>Project editing and project-wide search over your working folder — the same folder the CLI loop tools operate on.</div></div>
 <div class="term"><b class="t">Memory view</b><div>Browses ENGRAM — the distilled lessons LehroSol has learned about this project — and routes to the Distillery actions.</div></div>
-<div class="term"><b class="t">Skills panel</b><div>Lists mission playbooks (60+ <code>SKILL.md</code> playbooks ship in <code>skills/</code>) the agent can be pointed at.</div></div>
+<div class="term"><b class="t">Skills panel</b><div>Lists the built-in engineering playbooks the agent can be pointed at, plus reasoning level and resource profile. The playbooks are built into the app (<code>renderer/app.js</code>) — nothing is read from disk at runtime.</div></div>
 <div class="term"><b class="t">Settings</b><div>Ports, API keys, auto-start engine, and the CLI path (<b>Locate…</b>). Keys live in the CLI's own config, not duplicated.</div></div>
 <div class="term"><b class="t">System Graph</b><div>Live topology: <b>Vault · llama-server · adapter · loop · ENGRAM · web plane</b>. Click nodes to act; one JSON snapshot every 5&nbsp;s, pausable from the graph header.</div></div>
 <div class="term"><b class="t">Terminal / Events / Output / Engine log</b><div>A real shell, a real event feed, and streamed mission output — including the engine's stderr relay (llama-server log lines may appear here; that is the host app surfacing the log, not a CLI failure).</div></div>
@@ -174,9 +174,8 @@ pnpm dist                            # build the Windows NSIS installer</code></
 </table>
 
 <h2 id="license">10 · License &amp; honesty notes</h2>
-<div class="callout"><b>License:</b> GPL-3.0-or-later · Lehro Solutions.</div>
-<div class="callout red"><b>Honesty note (kept from v2.0.0):</b> earlier docs in this repo (<code>README-IMPLEMENTATION.md</code>) claimed a completed "Project Portal" implementation; that code never existed. The real app is <code>electron/</code> + <code>renderer/</code> here. <code>LOGIN.md</code> contained plaintext credentials — rotate that password and delete the file.</div>
-<p>Repo layout for reference: <code>electron/</code> main process, preload, CLI bridge · <code>renderer/</code> UI · <code>test-app/</code> node --test suite + QA harness · <code>runtime/</code> legacy swarm orchestrator CLI (kept) · <code>skills/</code> 60+ playbooks (kept) · <code>config/</code> legacy cloud-oriented configs (superseded by the LehroSol CLI).</p>
+<div class="callout"><b>License:</b> Apache-2.0 · © 2026 Lehro Solutions — see <code>LICENSE</code> and <code>NOTICE</code>. This project relicensed from GPL-3.0-or-later; the change is recorded in <code>CHANGELOG.md</code>.</div>
+<p>Repo layout for reference: <code>electron/</code> main process, preload, CLI bridge · <code>renderer/</code> UI · <code>scripts/</code> <code>start.js</code> launcher · <code>test-app/</code> node --test suite + QA harness · <code>docs/</code> this glossary. Only <code>electron/</code>, <code>renderer/</code>, and <code>package.json</code> are shipped — see <code>build.files</code>.</p>
 
 <footer>
   Lehrosol Code · Install &amp; Usage Glossary · generated for v2.4.0 · pair with the CLI's own glossary at <code>lehrosol-cli/docs/19-glossary.html</code> for the full command dictionary.

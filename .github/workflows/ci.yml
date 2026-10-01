@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+# The workflow needs nothing but read access to the repository contents.
+permissions:
+  contents: read
+
+# Only the newest commit needs to be tested; cancel superseded runs.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        # Windows is the primary target for this app. Linux is kept green so the
+        # POSIX branches in electron/bridge.js (which vs where, $SHELL vs
+        # powershell.exe) do not silently rot.
+        os:
+          - windows-latest
+          - ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # pnpm must be installed BEFORE actions/setup-node so that `cache: pnpm`
+      # can resolve `pnpm store path`. The version comes from the
+      # `packageManager` field in package.json (pnpm@11.15.1) so this workflow
+      # can never drift from what the repo pins.
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          # Matches the engines.node floor. Electron 44's tooling requires
+          # >= 22.12.0, so pinning the minor here keeps CI honest.
+          node-version: "22.12"
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Test
+        run: pnpm test

@@ -240,7 +240,7 @@ function renderMissionPanel() {
     <div class="mission-card ${m.status}" data-mid="${m.id}">
       <div class="mission-top">
         <span class="phase-badge">${m.status === 'running' ? (m.step ? `step ${m.step}/${m.total}` : esc(m.phase || 'starting')) : (m.status === 'done' ? '\u2713 done' : '\u2717 ' + m.status)}</span>
-        <span class="mission-prompt" title="${esc(m.prompt)}">${esc(m.prompt)}</span>
+        <span class="mission-prompt" title="${attr(m.prompt)}">${esc(m.prompt)}</span>
       </div>
       <div class="mission-tail">${esc(m.tail.slice(-3).join('\n'))}</div>
       ${(m.changedFiles && m.changedFiles.length) ? `<div class="mission-files">${m.changedFiles.slice(0, 4).map((f) => `<button class="file-chip" data-openfile="${attr(f)}">${esc(f.split(/[\\/]/).pop())}</button>`).join('')}</div>` : ''}
@@ -327,7 +327,7 @@ function renderGraph(graph) {
   lastGraphData = graph;
   const nodesEl = $('graphNodes');
   nodesEl.innerHTML = graph.nodes.map((nd) => `
-    <div class="gnode ${nd.hl ? 'hl' : ''} ${nd.state === 'warn' ? 'warn' : ''} ${nd.state === 'err' ? 'err' : ''}" style="left:${nd.x}%;top:${nd.y}%" data-node="${esc(nd.id)}">
+    <div class="gnode ${nd.hl ? 'hl' : ''} ${nd.state === 'warn' ? 'warn' : ''} ${nd.state === 'err' ? 'err' : ''}" style="left:${nd.x}%;top:${nd.y}%" data-node="${attr(nd.id)}">
       <div class="gname"><span class="dim">${nd.ico}</span>${esc(nd.name)}</div>
       <div class="gmeta">${esc(nd.meta)}</div>
     </div>`).join('');
@@ -736,7 +736,7 @@ async function renderVaultView() {
   });
   if (!state.models.length) await loadModels();
   $('vaultList').innerHTML = state.models.length
-    ? state.models.map((m) => `<div class="vault-card"><div style="flex:1"><div class="vault-name">${esc(m.id)}</div><div class="vault-meta">${esc(m.sizeLabel)}${m.role ? ' · ' + esc(m.role) : ''}${m.file ? ' · <span class="scan-root">' + esc(m.file) + '</span>' : ''}</div></div>${fitBadge(m.fit)}<button class="btn btn-dark" data-bench="${esc(m.id)}">Test</button><button class="btn btn-green" data-serve="${esc(m.id)}">Serve</button></div>`).join('')
+    ? state.models.map((m) => `<div class="vault-card"><div style="flex:1"><div class="vault-name">${esc(m.id)}</div><div class="vault-meta">${esc(m.sizeLabel)}${m.role ? ' · ' + esc(m.role) : ''}${m.file ? ' · <span class="scan-root">' + esc(m.file) + '</span>' : ''}</div></div>${fitBadge(m.fit)}<button class="btn btn-dark" data-bench="${attr(m.id)}">Test</button><button class="btn btn-green" data-serve="${attr(m.id)}">Serve</button></div>`).join('')
     : '<div class="alt-sub">No GGUF models found on this PC. Put models in a folder like <code>D:\\AI Models</code> or use “Scan another folder…”.</div>';
   if (state.scan) $('scanInfo').textContent = `Scanned ${state.scan.scannedRoots.length} folder(s) · RAM ${state.scan.totalGB} GB · usable budget ~${state.scan.budgetGB} GB`;
   document.querySelectorAll('[data-serve]').forEach((b) => b.addEventListener('click', () => serveModel(b.dataset.serve)));
@@ -777,7 +777,7 @@ function benchLeaderboard() {
 async function renderBenchView() {
   const alt = $('viewAlt');
   if (!state.models.length) await loadModels();
-  const options = state.models.map((m) => `<option value="${esc(m.id)}">${esc(m.id)} (${esc(m.sizeLabel)})</option>`).join('');
+  const options = state.models.map((m) => `<option value="${attr(m.id)}">${esc(m.id)} (${esc(m.sizeLabel)})</option>`).join('');
   const board = benchLeaderboard();
   alt.innerHTML = `<div class="alt-title">Model Test Bench</div>
     <div class="alt-sub">Benchmark and feel out each model: one click serves it, runs the prompt, and records latency + tokens/sec. Run the same preset across models to compare.</div>
@@ -852,7 +852,9 @@ async function renderFilesView() {
   alt.innerHTML = `<div class="alt-title">Files</div><div class="alt-sub">${state.projectDir ? esc(state.projectDir) : 'No project open.'}</div><button class="btn btn-green" id="btnOpenProject">Open Project Folder</button><div id="treeList" style="margin-top:12px"></div>`;
   $('btnOpenProject').addEventListener('click', pickProject);
   if (state.projectDir && bridge) {
-    state.tree = await bridge.projectTree({ dir: state.projectDir });
+    const tree = await bridge.projectTree({ dir: state.projectDir });
+    if (!Array.isArray(tree)) { state.tree = []; $('treeList').innerHTML = ''; toast(tree.error || 'Project folder unavailable'); return; }
+    state.tree = tree;
     $('treeList').innerHTML = treeHtml(state.tree, 0);
     document.querySelectorAll('.tree-item[data-file]').forEach((el) => el.addEventListener('click', () => openFile(el.dataset.file)));
   }
@@ -860,7 +862,7 @@ async function renderFilesView() {
 function treeHtml(entries, depth) {
   return entries.map((e) => e.dir
     ? `<div class="tree-item tree-dir" style="padding-left:${8 + depth * 14}px">\u25b8 ${esc(e.name)}</div>${treeHtml(e.children || [], depth + 1)}`
-    : `<div class="tree-item" data-file="${esc(e.path)}" style="padding-left:${8 + depth * 14}px">\u29c9 ${esc(e.name)}</div>`).join('');
+    : `<div class="tree-item" data-file="${attr(e.path)}" style="padding-left:${8 + depth * 14}px">\u29c9 ${esc(e.name)}</div>`).join('');
 }
 async function pickProject() {
   if (!bridge) return;
@@ -960,8 +962,8 @@ function renderSettingsView() {
     <div class="settings-row"><label>RAM</label><span style="font-family:var(--mono);font-size:12px">${esc(String((state.info && state.info.totalGB) || '?'))} GB total</span></div>
     <div class="settings-row"><label>Resource profile</label><select id="setResource"><option value="eco" ${state.resourceProfile === 'eco' ? 'selected' : ''}>Eco</option><option value="balanced" ${state.resourceProfile === 'balanced' ? 'selected' : ''}>Balanced</option><option value="performance" ${state.resourceProfile === 'performance' ? 'selected' : ''}>Performance</option></select><span class="dim">Smart context, threads, and RAM headroom</span></div>
     <div class="settings-row"><label>Theme</label><select id="setTheme"><option value="dark" ${state.theme === 'dark' ? 'selected' : ''}>Dark</option><option value="light" ${state.theme === 'light' ? 'selected' : ''}>Light</option></select><span class="dim">Applies instantly on save</span></div>
-    <div class="settings-row"><label>Default port</label><input id="setPort" value="${esc(state.settings.port)}" /></div>
-    <div class="settings-row"><label>API key</label><input id="setKey" value="${esc(state.settings.apiKey)}" /></div>
+    <div class="settings-row"><label>Default port</label><input id="setPort" value="${attr(state.settings.port)}" /></div>
+    <div class="settings-row"><label>API key</label><input id="setKey" value="${attr(state.settings.apiKey)}" /></div>
     <div class="settings-row"><label>Auto-start engine</label><label class="livetoggle"><input type="checkbox" id="setAuto" ${state.settings.autoServe ? 'checked' : ''} /> resume the last served model on launch</label></div>
     <div class="modal-actions" style="justify-content:flex-start"><button class="btn btn-green" id="btnSaveSettings">Save</button><button class="btn btn-dark" id="btnStopEngine">Stop engine</button></div>`;
   $('btnLocateCli').addEventListener('click', async () => {
@@ -1018,9 +1020,12 @@ function renderSearchView() {
         }
       }
     };
-    if (!state.tree.length) state.tree = await bridge.projectTree({ dir: state.projectDir });
+    if (!state.tree.length) {
+      const tree = await bridge.projectTree({ dir: state.projectDir });
+      state.tree = Array.isArray(tree) ? tree : [];
+    }
     await walk(state.tree);
-    $('searchResults').innerHTML = hits.length ? hits.map((h) => `<div class="tree-item" data-file="${esc(h.path)}"><span class="dim">${esc(h.path.split(/[\\/]/).pop())}:${h.line}</span> ${esc(h.text)}</div>`).join('') : '<div class="alt-sub">No matches.</div>';
+    $('searchResults').innerHTML = hits.length ? hits.map((h) => `<div class="tree-item" data-file="${attr(h.path)}"><span class="dim">${esc(h.path.split(/[\\/]/).pop())}:${h.line}</span> ${esc(h.text)}</div>`).join('') : '<div class="alt-sub">No matches.</div>';
     document.querySelectorAll('#searchResults .tree-item').forEach((el) => el.addEventListener('click', () => openFile(el.dataset.file)));
   });
 }
@@ -1144,7 +1149,7 @@ function openPalette() {
 function closePalette() { $('palette').classList.add('hidden'); }
 function renderPalette(q) {
   const items = COMMANDS.filter((c) => c.name.toLowerCase().includes(q.toLowerCase()));
-  $('paletteList').innerHTML = items.map((c, i) => `<div class="pal-item ${i === 0 ? 'sel' : ''}" data-cmd="${esc(c.name)}">${esc(c.name)}<span class="pal-hint">${esc(c.hint)}</span></div>`).join('') || '<div class="pal-item">No matching command</div>';
+  $('paletteList').innerHTML = items.map((c, i) => `<div class="pal-item ${i === 0 ? 'sel' : ''}" data-cmd="${attr(c.name)}">${esc(c.name)}<span class="pal-hint">${esc(c.hint)}</span></div>`).join('') || '<div class="pal-item">No matching command</div>';
   document.querySelectorAll('.pal-item[data-cmd]').forEach((el) => el.addEventListener('click', () => runCommand(el.dataset.cmd)));
 }
 function runCommand(name) {
@@ -1159,7 +1164,7 @@ async function newAgentModal() {
   const options = state.models.map((m) => `<option>${esc(m.id)}</option>`).join('') || '<option>no models found</option>';
   openModal(`<h3>Serve a local model</h3>
     <div class="settings-row"><label>Model</label><select id="naModel">${options}</select></div>
-    <div class="settings-row"><label>Port</label><input id="naPort" value="${esc(state.settings.port)}" /></div>
+    <div class="settings-row"><label>Port</label><input id="naPort" value="${attr(state.settings.port)}" /></div>
     <div class="modal-actions"><button class="btn btn-dark" id="naCancel">Cancel</button><button class="btn btn-green" id="naGo">Serve &amp; wire agents</button></div>`);
   $('naCancel').addEventListener('click', closeModal);
   $('naGo').addEventListener('click', () => {

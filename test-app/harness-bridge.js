@@ -13,14 +13,14 @@
   let streamCb = null;
   const ok = (v) => Promise.resolve(v);
   window.lehro = {
-    info: () => ok({ platform: 'win32', cli: 'D:\\lehrosol-cli\\bin\\lehrosol.js', home: 'C:\\Users\\Home Station\\.lehro', totalGB: 15.8 }),
+    info: () => ok({ platform: 'win32', cli: 'C:\\tools\\lehrosol-cli\\bin\\lehrosol.js', home: 'C:\\Users\\you\\.lehro', cliVersion: '3.2.0', totalGB: 15.8 }),
     setCliPath: () => ok({ ok: true }),
     pickFile: () => ok(null),
     runJson: (args) => ok({ ok: true, data: { ok: true, echo: args } }),
     snapshot: () => ok({ ok: true, data: { ok: true, vault: { models: 5, ready: 5, server: 'vault' }, engrams: 12, web: false, adapters: 21 } }),
     vault: () => ok({ ok: true, data: { ok: true, models: MODELS, roots: ['D:\\AI Models'] } }),
     addRoot: (dir) => ok({ ok: true, data: { ok: true, added: dir } }),
-    serveState: () => ok({ home: 'C:\\Users\\Home Station\\.lehro', serve: { model: 'Jan-v3.5-4B-Q4_K_XL', port: 7000, pid: 4242 }, config: {} }),
+    serveState: () => ok({ home: 'C:\\Users\\you\\.lehro', serve: { model: 'Jan-v3.5-4B-Q4_K_XL', port: 7000, pid: 4242 }, config: {} }),
     ping: () => ok({ ok: true, status: 200, ms: 14, models: ['Jan-v3.5-4B-Q4_K_XL'] }),
     nativeScan: () => ok({ scannedRoots: ['D:\\AI Models'], hitRoots: ['D:\\AI Models'], models: [], totalGB: 15.8, budgetGB: 11.1 }),
     chat: () => ok({ ok: true, text: 'const debounce = (fn, ms) => { /* … */ }', ms: 1840, tokens: 96, promptTokens: 41, tokPerSec: 52.2 }),

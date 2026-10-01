@@ -1,0 +1,102 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+# Publishing a GitHub Release requires write access to contents.
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  dist:
+    name: build windows installer
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # electron-builder resolves the version from package.json and needs the
+          # full history to derive a changelog/version string.
+          fetch-depth: 0
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          # Matches the engines.node floor. Electron 44's tooling requires
+          # >= 22.12.0, so pinning the minor here keeps CI honest.
+          node-version: "22.12"
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # ---------------------------------------------------------------------------
+      # CODE SIGNING IS NOT CONFIGURED. The installer produced below is UNSIGNED.
+      # Windows SmartScreen will warn on first run, and the binary will not be
+      # trusted by anything that checks Authenticode. Do not describe a release as
+      # signed until one of these is actually done.
+      #
+      # Option A — CI signing certificate (recommended, no secrets in the repo):
+      #   Add repository secrets:
+      #     CSC_LINK         = base64 of the exported .pfx, e.g. base64 -w0 cert.pfx
+      #     CSC_KEY_PASSWORD = the password for that .pfx
+      #   electron-builder picks both up automatically from the environment. No
+      #   code change is needed here; the steps below start working as soon as the
+      #   secrets exist.
+      #
+      # Option B — certificate committed to the repository:
+      #   Set `win.certificateFile` in the `build` block of package.json (or a
+      #   CSC_LINK environment variable) pointing at the .pfx on disk. Easier to
+      #   set up, but it puts a signing key in git history.
+      #
+      # Until then, if a release MUST be trusted before signing is configured,
+      # publish a SHA-256 checksum alongside the installer in the release notes.
+      # ---------------------------------------------------------------------------
+
+      # --publish=never is set in the `dist` script on purpose. electron-builder
+      # 26 auto-publishes whenever it detects a CI environment, which fails with
+      # "GitHub Personal Access Token is not set" and is removed in v27. This
+      # workflow publishes through softprops/action-gh-release instead, so the
+      # build step must only build.
+      - name: Build installer
+        run: pnpm dist
+        env:
+          # Set these two secrets on the repository to enable signing. Left
+          # deliberately unset/empty so this workflow is honest about the
+          # current unsigned state.
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+
+      - name: List build output
+        run: Get-ChildItem -Path dist -File | Select-Object Name, Length
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          # dist/ holds the NSIS installer, the blockmap, and the auto-update
+          # metadata written by electron-builder. Paths are relative to the
+          # repository root.
+          files: |
+            dist/*.exe
+            dist/*.blockmap
+            dist/latest.yml
+          fail_on_unmatched_files: false
+          draft: false
+          generate_release_notes: true
+          body: |
+            ## Code signing status
+
+            **This installer is unsigned.** Windows SmartScreen will warn on
+            first run. See `.github/workflows/release.yml` for the outstanding
+            signing work.

@@ -1,0 +1,21 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Report a security vulnerability
+    url: https://github.com/LehroSolutions/Lehrosol-Code/security/advisories/new
+    about: >-
+      **Do not open a public issue for a security problem.** Use GitHub's private
+      vulnerability reporting so the report is not public. See SECURITY.md for the
+      threat model, what is and is not considered a vulnerability, and the
+      reporting guidelines.
+
+  - name: Contributing and pull requests
+    url: https://github.com/LehroSolutions/Lehrosol-Code/blob/main/CONTRIBUTING.md
+    about: >-
+      Development setup, testing, coding conventions, and the IPC validation rules
+      every new ipcMain.handle must satisfy. Read this before your first PR.
+
+  - name: The LehroSol CLI (separate project)
+    url: https://github.com/LehroSolutions/lehrosol-cli
+    about: >-
+      Lehrosol Code is a GUI over this CLI. Bugs in `lehrosol ...` commands, the
+      model vault, engines, loops, or MCP belong in that repository instead.

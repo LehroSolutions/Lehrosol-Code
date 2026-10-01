@@ -1,7 +1,19 @@
+# pnpm settings (pnpm 11 no longer reads a "pnpm" field in package.json, and it
+# reads its settings from this file rather than from .npmrc).
+#
+# This is NOT a workspace: there is no `packages:` list, so pnpm treats the
+# repo root as a single package. The file is named pnpm-workspace.yaml only
+# because that is where pnpm 11 expects its settings to live.
+
+# electron-builder cannot follow pnpm's default symlinked node_modules when
+# packaging, so we need a flat npm-style tree. Previously this lived in .npmrc,
+# where pnpm 11 silently ignored it — the setting had to move here.
+nodeLinker: hoisted
+
 allowBuilds:
+  # Electron's postinstall downloads the prebuilt binary. Required — without it
+  # a fresh install has no runtime and `pnpm start` fails.
   electron: true
-# pnpm 11 settings home (the "pnpm" field in package.json is no longer read).
-# Allow Electron's postinstall to download its binary without an
-# approve-builds prompt on fresh installs.
-onlyBuiltDependencies:
-  - electron
+  # electron-builder pulls this in for the Squirrel.Windows target. We only
+  # build NSIS, so its build script is never needed.
+  electron-winstaller: false

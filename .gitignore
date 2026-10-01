@@ -1,3 +1,8 @@
+# LehroSol Code — ignore rules
+# The app itself ships only electron/**, renderer/**, and package.json
+# (see build.files in package.json), so this file covers local dev state,
+# build output, and machine-specific scratch only.
+
 # Dependencies
 node_modules/
 
@@ -10,17 +15,23 @@ build/*
 builder-debug.yml
 latest.yml
 
-# Git worktrees (agent scratch dirs)
+# Local LehroSol data home (CLI state: vault, serve.json, engrams)
+.lehro/
+
+# Local model weights (GGUF) — large binaries, never commit
+*.gguf
+
+# Agent scratch dirs
 .worktrees/
 
-# Playwright / smoke artifacts
+# Browser-automation artifacts
 .playwright-mcp/
-smoke-test/*.log
 
 # Local env & secrets
 .env
 .env.*
 !.env.example
+.env.local
 
 # Logs & OS junk
 *.log

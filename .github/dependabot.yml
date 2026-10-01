@@ -1,0 +1,45 @@
+version: 2
+
+updates:
+  # The app itself. Dev dependencies only today — there are no runtime
+  # dependencies by design, so anything Dependabot opens here is an Electron or
+  # electron-builder bump.
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "07:00"
+      timezone: Etc/UTC
+    open-pull-requests-limit: 10
+    commit-message:
+      prefix: "chore(deps)"
+    labels:
+      - dependencies
+    groups:
+      # Electron bundles its own Chromium; bump it alone so the diff is reviewable.
+      electron:
+        patterns:
+          - "electron"
+        update-types:
+          - minor
+          - patch
+      electron-builder:
+        patterns:
+          - "electron-builder"
+
+  # The actions this repo's own workflows depend on. A compromised action has
+  # write access in a release workflow, so this matters.
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "07:00"
+      timezone: Etc/UTC
+    open-pull-requests-limit: 10
+    commit-message:
+      prefix: "chore(ci)"
+    labels:
+      - dependencies
+      - github-actions

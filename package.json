@@ -16,7 +16,7 @@
     "url": "https://github.com/LehroSolutions/Lehrosol-Code/issues"
   },
   "engines": {
-    "node": ">=22.12.0"
+    "node": ">=22.13.0"
   },
   "scripts": {
     "start": "node scripts/start.js",

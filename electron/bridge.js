@@ -67,7 +67,7 @@ function buildWindowsCmdLine(cmd, args) {
 function spawnCli(args, opts = {}) {
   const found = findLehrosol();
   if (!found) {
-    const err = new Error('LehroSol CLI not found. Install it (npm install -g in the CLI folder) or set LEHROSOL_BIN to bin/lehrosol.js');
+    const err = new Error('LehroSol CLI not found. Run npm install -g @lehrosolutions/cli@beta or set LEHROSOL_BIN to bin/lehrosol.js');
     err.code = 'ENOCLI';
     throw err;
   }

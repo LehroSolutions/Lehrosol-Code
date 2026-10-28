@@ -2,7 +2,7 @@
 
 This repository ships a Windows installer through GitHub Releases. It is marked
 private in package.json to prevent accidental npm publication. The paired npm
-package is `lehrosol-cli`, maintained in the sibling repository.
+package is `@lehrosolutions/cli`, maintained in the sibling repository.
 
 ## Validate a release candidate
 

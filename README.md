@@ -44,6 +44,9 @@ Microsoft Visual C++ Build Tools are **not** needed.
 
 Install the CLI first — this app drives it for every action.
 
+Install the current CLI beta with `npm install -g @lehrosolutions/cli@beta`.
+The command names remain `lehrosol` and `lehr-sol`.
+
 The bridge resolves the CLI in this order:
 
 1. **`LEHROSOL_BIN`** — an absolute path to the CLI entry script, if set and it exists

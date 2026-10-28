@@ -12,17 +12,15 @@ reports we would otherwise receive are, by design, not vulnerabilities.
 
 ## Supported versions
 
-This project has never been tagged or published to a distribution channel.
-Everything below is the current development line; there are no prior releases
-to support.
+The 2.4.x source line is maintained. Draft installers are release candidates;
+a draft does not imply that interactive installation or code signing has been verified.
 
 | Version | Supported          | Notes                                     |
 | ------- | ------------------ | ----------------------------------------- |
 | 2.4.x   | :white_check_mark: | Current `main` line; receives fixes       |
 | < 2.4   | :x:                | Unreleased / superseded development state |
 
-Once the project starts tagging releases, this table becomes the compatibility
-contract and only the newest minor line will be supported.
+Only the newest supported minor line receives fixes.
 
 ---
 

@@ -25,7 +25,7 @@ Closes #
 - [ ] My change touches `electron/main.js`, `electron/preload.js`, or
       `renderer/app.js` — paths with **no existing automated coverage** — and I
       added coverage for it. *(See the coverage gap in CONTRIBUTING.md: the suite
-      currently covers `electron/bridge.js` only. If this box does not apply,
+      covers `electron/bridge.js` and path confinement, with gaps in full Electron and renderer integration. If this box does not apply,
       say so.)*
 - [ ] I did not weaken, skip, or delete a test to make things pass.
 

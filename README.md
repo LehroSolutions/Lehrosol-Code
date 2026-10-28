@@ -4,6 +4,10 @@
 
 **Windows-first.** This app is built, tested, and packaged for Windows. It is developed and supported on Windows; other platforms are not currently a target (see [Requirements](#requirements)).
 
+[CI](https://github.com/LehroSolutions/Lehrosol-Code/actions/workflows/ci.yml) · [Releases](https://github.com/LehroSolutions/Lehrosol-Code/releases) · [Release guide](RELEASING.md)
+
+Version **2.4.1** is a release candidate. Tagged builds produce a draft Windows installer release with SHA256SUMS for maintainer review. Installers are currently unsigned; installation and CLI-pairing checks remain part of promotion to a published release.
+
 > **📖 Documentation:** [**docs/glossary.html**](docs/glossary.html) — the full glossary, install walkthrough, CLI pairing, and a **Troubleshooting** section for common errors. Start there if anything below is unclear.
 
 | | |
@@ -21,7 +25,7 @@
 | | |
 |---|---|
 | **OS** | **Windows 10/11 (x64)** — Windows is the only supported target; builds are Windows-only |
-| **Node.js** | **22+** (`package.json` → `engines.node >= 22`) |
+| **Node.js** | **22.13.0+** for source builds (`engines.node >=22.13.0`) |
 | **Package manager** | **pnpm 11** (pinned via `packageManager` → `pnpm@11.15.1`) |
 | **LehroSol CLI** | **3.0+ required for the full experience** — see [The CLI relationship](#the-cli-relationship) |
 | **Native build tools** | Not required — there are **no native modules** |
@@ -80,7 +84,7 @@ Pick a model, pick a preset (code / reasoning / summarize / creative / custom), 
 ## Run it (Windows)
 
 ```powershell
-# Requires Node.js 22+ (LTS recommended)
+# Requires Node.js 22.13.0+
 corepack enable pnpm                # one-time; honors the pinned pnpm 11.15.1
 # Alternative if Corepack is unavailable: npm i -g pnpm@latest-11
 pnpm install                        # downloads Electron (one-time, needs internet)
@@ -88,8 +92,8 @@ pnpm start
 ```
 
 - Tests: `node --test "test-app/*.test.js"` (or `pnpm test`) · Installer: `pnpm dist`
-- This repo is **pnpm 11-managed** (`packageManager` pins `pnpm@11.15.1`; Node.js **22+** required). The first `pnpm install` creates `pnpm-lock.yaml` — commit it. `.npmrc` sets `node-linker=hoisted` so electron-builder can package the flat `node_modules`.
-- Electron's binary-download script is pre-approved in `pnpm-workspace.yaml` (`onlyBuiltDependencies`) — the new home for pnpm settings; the old `"pnpm"` field in `package.json` is no longer read by pnpm 11, so no `pnpm approve-builds` prompt on fresh installs.
+- This repo is **pnpm 11-managed** (`packageManager` pins `pnpm@11.15.1`). Use `pnpm install --frozen-lockfile` with the committed lockfile. `pnpm-workspace.yaml` sets `nodeLinker: hoisted` for electron-builder.
+- Electron's binary-download script is approved through `allowBuilds` in `pnpm-workspace.yaml`.
 - `pnpm start` launches Electron through `scripts/start.js`, which strips pnpm-injected `NODE_OPTIONS` (e.g. `--use-system-ca`) that Electron rejects with exit code 9.
 - CLI not on PATH? Settings → **Locate…** → pick your `bin/lehrosol.js` (persisted), or set `$env:LEHROSOL_BIN`.
 - Configuration is entirely optional — see [`.env.example`](.env.example).
@@ -121,11 +125,11 @@ The app is otherwise fully local: it makes no network calls beyond whatever the 
 
 ## Footprint
 
-The app is ~90 KB of source with zero runtime dependencies; Electron itself is the only heavyweight (one-time download). Model discovery scans are time- and entry-budgeted so they never thrash your disk; polling is one JSON snapshot every 5 s and can be paused from the graph header.
+The application declares no npm runtime dependencies beyond its packaged Electron runtime. Model discovery scans have time and entry budgets; graph polling runs every 5 seconds and can be paused from the graph header.
 
 ## Privacy
 
-No telemetry, no analytics, no crash reporting. The app talks to your local CLI, your local model server, and the filesystem. If you set an API key in **Settings**, it is stored in the CLI's own config under `~/.lehro` and is never sent anywhere by this app.
+No telemetry, analytics, or automatic crash reporting is configured. The app talks to the CLI, the configured model server, and the filesystem. API keys are stored under `~/.lehro` and sent to the configured engine when needed for authentication. Choose and trust the engine endpoint accordingly.
 
 ## Repo layout
 

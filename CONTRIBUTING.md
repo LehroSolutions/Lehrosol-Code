@@ -32,7 +32,7 @@ LehroSol has one engine and three front-ends. This repo is the desktop one:
 | -------------------------------- | ------------------------------------------- | ---------- |
 | **Lehrosol Code** (desktop IDE)  | `LehroSolutions/Lehrosol-Code` (this repo)  | Apache-2.0 |
 | **LehroSol CLI** (the engine)    | `LehroSolutions/lehrosol-cli`               | Apache-2.0 |
-| Web dashboard (`lehrosol gui`)   | `lehrosol-cli/gui/` — ships inside the CLI  | Apache-2.0 |
+| Web dashboard                  | `lehrosol-cli/gui/` — separate source client | Apache-2.0 |
 
 The CLI is the engine and the source of truth: it owns the loop, the harness,
 the orchestrator, the MCP control plane, and the `~/.lehro` state home. This app
@@ -80,9 +80,9 @@ same PR or note it in the description.
 
 | Requirement | Version   | Notes                                                                 |
 | ----------- | --------- | --------------------------------------------------------------------- |
-| Node.js     | **22+**   | Enforced in `package.json` `engines`. LTS recommended.                 |
+| Node.js     | **22.13.0+** | Enforced in `package.json` `engines`.                              |
 | pnpm        | **11**    | Pinned by `packageManager: pnpm@11.15.1`. **Use this exact version.**  |
-| OS          | Windows   | Primary target. Linux works and is tested in CI; macOS is untested.    |
+| OS          | Windows 10/11 x64 | Supported desktop target. Linux bridge tests run in CI.          |
 
 Enable pnpm through Corepack so the pinned version is used automatically:
 
@@ -93,7 +93,7 @@ corepack enable pnpm
 If Corepack is unavailable: `npm i -g pnpm@latest-11`.
 
 **Do not use plain `npm install`.** The repo depends on a hoisted
-`node_modules` layout — `.npmrc` sets `node-linker=hoisted` because
+`node_modules` layout — `pnpm-workspace.yaml` sets `nodeLinker: hoisted` because
 electron-builder cannot follow pnpm's default symlinked tree. No native modules
 are used, so Microsoft Build Tools are **not** required.
 
@@ -112,9 +112,8 @@ pnpm start
 exit code 9. **Do not replace it with a bare `electron .`** without preserving
 that behaviour.
 
-Electron's postinstall is already approved via `onlyBuiltDependencies` in
-`pnpm-workspace.yaml` (pnpm 11 reads that file; it no longer reads the `"pnpm"`
-field in `package.json`). You should never see an `approve-builds` prompt.
+Electron's postinstall is approved through `allowBuilds` in
+`pnpm-workspace.yaml`.
 
 If the CLI is not found: Settings → **Locate…** → pick
 `D:\lehrosol-cli\bin\lehrosol.js`, or set `$env:LEHROSOL_BIN`.
@@ -132,11 +131,11 @@ test framework to install.
 
 ### Be honest about the coverage gap
 
-**The suite currently covers `electron/bridge.js` and nothing else.** 24 tests
+**The suite covers `electron/bridge.js` and path confinement.** 32 tests
 exercise CLI spawning, the Windows command-line quoting, `LEHROSOL_BIN`
 resolution, JSON parsing, vault roots, serve state, engine pings, chat
 round-trips, the native GGUF scanner, `listTree`, and the v2.4 quick-lane
-commands.
+commands, plus traversal and symlink confinement in `electron/pathConfinement.js`.
 
 There is **no automated coverage** for:
 
@@ -235,7 +234,7 @@ them working; CI runs Linux to keep that honest.
   `v2.0.0` timeout note in `bridge.js`). That is the house style. Match it.
 - **Do not add demo content, seed data, or placeholders that look like real
   results.** Every value on screen must come from the machine. This is a
-  standing product rule — see the honesty note in `README.md`.
+  standing product rule.
 - **Do not reintroduce `LOGIN.md`-style credentials.** There is no login, no
   account, and no server. Nothing in this app should ever hold a secret on disk
   that a user could paste into a bug report.

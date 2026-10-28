@@ -27,6 +27,13 @@ jobs:
           # full history to derive a changelog/version string.
           fetch-depth: 0
 
+      - name: Validate release tag
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: pwsh
+        run: |
+          $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
+          if ($env:GITHUB_REF_NAME -ne "v$version") { throw 'Git tag must match package.json version' }
+
       - name: Install pnpm
         uses: pnpm/action-setup@v4
 
@@ -43,6 +50,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Test
+        run: pnpm test
+
       # ---------------------------------------------------------------------------
       # CODE SIGNING IS NOT CONFIGURED. The installer produced below is UNSIGNED.
       # Windows SmartScreen will warn on first run, and the binary will not be
@@ -57,13 +67,8 @@ jobs:
       #   code change is needed here; the steps below start working as soon as the
       #   secrets exist.
       #
-      # Option B — certificate committed to the repository:
-      #   Set `win.certificateFile` in the `build` block of package.json (or a
-      #   CSC_LINK environment variable) pointing at the .pfx on disk. Easier to
-      #   set up, but it puts a signing key in git history.
-      #
-      # Until then, if a release MUST be trusted before signing is configured,
-      # publish a SHA-256 checksum alongside the installer in the release notes.
+      # Keep signing keys in repository secrets; never commit a .pfx to git.
+      # Checksums below verify downloaded bytes; they do not replace signing.
       # ---------------------------------------------------------------------------
 
       # --publish=never is set in the `dist` script on purpose. electron-builder
@@ -83,7 +88,27 @@ jobs:
       - name: List build output
         run: Get-ChildItem -Path dist -File | Select-Object Name, Length
 
+      - name: Generate installer checksums
+        shell: pwsh
+        run: |
+          $installers = @(Get-ChildItem -Path dist -Filter *.exe -File)
+          if ($installers.Count -eq 0) { throw 'No Windows installer was produced' }
+          $checksums = $installers | ForEach-Object {
+            $hash = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+            "$hash  $($_.Name)"
+          }
+          $checksums | Set-Content -LiteralPath dist/SHA256SUMS -Encoding utf8NoBOM
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-installer
+          path: |
+            dist/*.exe
+            dist/SHA256SUMS
+          if-no-files-found: error
+
       - name: Publish release
+        if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
           # dist/ holds the NSIS installer, the blockmap, and the auto-update
@@ -91,14 +116,13 @@ jobs:
           # repository root.
           files: |
             dist/*.exe
-            dist/*.blockmap
-            dist/latest.yml
-          fail_on_unmatched_files: false
-          draft: false
+            dist/SHA256SUMS
+          fail_on_unmatched_files: true
+          draft: true
           generate_release_notes: true
           body: |
             ## Code signing status
 
-            **This installer is unsigned.** Windows SmartScreen will warn on
-            first run. See `.github/workflows/release.yml` for the outstanding
-            signing work.
+            Installers are unsigned unless signing credentials were configured
+            for this build. Check the executable's Authenticode signature before
+            describing the release as signed. SHA256SUMS verifies download integrity.

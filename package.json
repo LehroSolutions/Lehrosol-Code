@@ -1,6 +1,7 @@
 {
   "name": "lehrosol-code",
   "productName": "Lehrosol Code",
+  "private": true,
   "version": "2.4.0",
   "description": "Lehrosol Code — the agentic engineering IDE for local models. The desktop front-end of LehroSol: model vault, agent missions, live system graph, and an editor with AI suggestions, all running against GGUFs on your own drive.",
   "license": "Apache-2.0",

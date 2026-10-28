@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Release preparation
+- Prevent accidental npm publication of the desktop application.
+- Run tests before packaging, require matching release tags, and attach installer checksums.
+- Manual release workflows upload candidates; tagged builds create reviewable draft releases.
+- Document installer verification and keep signing keys in repository secrets.
+
 ### Security
 - **Arbitrary file read/write from renderer input.** `project:read`, `project:write`, and `project:tree` passed the renderer's path straight to `fs` after a bare `String()` coercion — no resolution, no containment check, no symlink handling. Reachable second-order, because `renderer/app.js` parses "Files changed:" lines out of streamed CLI output and feeds them back through `projectRead`. A malicious or compromised CLI binary could direct the app to read or write any path the process could reach. Paths are now confined to a directory the user explicitly picked through the native dialog (`electron/pathConfinement.js`), checked lexically and again after symlink resolution; `project:write` also gained an 8 MB cap.
 - **No IPC sender validation.** All 30 `ipcMain.handle` registrations ignored the event's sender. Every handler is now guarded.

@@ -35,7 +35,7 @@ jobs:
           if ($env:GITHUB_REF_NAME -ne "v$version") { throw 'Git tag must match package.json version' }
 
       - name: Install pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@v6
 
       - name: Set up Node.js
         uses: actions/setup-node@v4

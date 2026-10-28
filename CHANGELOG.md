@@ -20,6 +20,7 @@ installer was publicly distributed for every version.
 - Test before packaging, require version-matching tags, and attach SHA256SUMS to installer drafts.
 - Provide downloadable candidate artifacts from manual workflows and draft GitHub Releases from tags.
 - Keep signing credentials in repository secrets.
+- Normalize installer asset names before hashing so GitHub downloads and SHA256SUMS use the same filename.
 
 ### Validation boundary
 - The Node suite covers CLI integration and filesystem confinement (32 tests).

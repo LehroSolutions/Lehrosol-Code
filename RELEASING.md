@@ -24,6 +24,9 @@ A manual run of `.github/workflows/release.yml` tests and builds the installer,
 generates SHA256SUMS, and uploads a `windows-installer` artifact for review.
 It does not publish a GitHub Release.
 
+Installer asset names are normalized before checksums are generated so that
+the filename in SHA256SUMS matches the name served by GitHub Releases.
+
 For a new version, update package.json and CHANGELOG.md, commit and push, then
 create a new matching `v<version>` tag. Never move existing release tags. The
 tagged workflow creates a draft GitHub Release with the installer and checksums.

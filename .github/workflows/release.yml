@@ -94,6 +94,15 @@ jobs:
         run: |
           $installers = @(Get-ChildItem -Path dist -Filter *.exe -File)
           if ($installers.Count -eq 0) { throw 'No Windows installer was produced' }
+          foreach ($installer in $installers) {
+            $releaseName = $installer.Name -replace '\s+', '.'
+            if ($releaseName -ne $installer.Name) {
+              $releasePath = Join-Path $installer.DirectoryName $releaseName
+              if (Test-Path -LiteralPath $releasePath) { throw 'Installer asset name collision' }
+              Rename-Item -LiteralPath $installer.FullName -NewName $releaseName
+            }
+          }
+          $installers = @(Get-ChildItem -Path dist -Filter *.exe -File)
           $checksums = $installers | ForEach-Object {
             $hash = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
             "$hash  $($_.Name)"

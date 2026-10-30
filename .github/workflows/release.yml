@@ -109,7 +109,7 @@ jobs:
           }
           $checksums | Set-Content -LiteralPath dist/SHA256SUMS -Encoding utf8NoBOM
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: windows-installer
           path: |

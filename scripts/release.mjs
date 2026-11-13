@@ -68,8 +68,8 @@ try {
   if (!resolve(staging).startsWith(resolve(tmpdir()) + sep) || !basename(staging).startsWith('lehrosol-release-payload-')) throw new Error('Refusing unsafe release-staging cleanup');
   rmSync(staging, { recursive: true, force: true });
 }
-const inspected = spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', `Import-Module (Join-Path $PSHOME 'Modules\\Microsoft.PowerShell.Utility\\Microsoft.PowerShell.Utility.psd1') -ErrorAction Stop; $sig = Get-AuthenticodeSignature -LiteralPath '${installer.replace(/'/g, "''")}'; @{status=$sig.Status.ToString(); statusMessage=$sig.StatusMessage} | ConvertTo-Json -Compress`], { encoding: 'utf8', windowsHide: true, timeout: 30000 });
-if (inspected.status !== 0) throw new Error('Could not verify installer Authenticode status');
+const inspected = spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-File', join(root, 'scripts', 'inspect-signature.ps1'), '-Path', installer], { encoding: 'utf8', windowsHide: true, timeout: 30000 });
+if (inspected.status !== 0) throw new Error(`Could not verify installer Authenticode status: ${inspected.error?.message || inspected.stderr || `exit ${inspected.status}`}`);
 const signature = { ...JSON.parse(inspected.stdout.replace(/^\uFEFF/, '')), sha256 };
 if (!['Valid', 'NotSigned'].includes(signature.status)) throw new Error(`Installer signature verification failed: ${signature.status}`);
 mkdirSync(join(root, 'dist', 'qa'), { recursive: true });

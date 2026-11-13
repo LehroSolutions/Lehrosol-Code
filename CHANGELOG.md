@@ -7,7 +7,7 @@ installer was publicly distributed for every version.
 
 ## [Unreleased]
 
-## [2.4.2] — 2026-11-12 (release candidate)
+## [2.4.2] — 2026-11-13 (release candidate)
 
 ### Added
 - Full-size mission output with answer/activity/raw views, filtering, changed-file
@@ -32,6 +32,8 @@ installer was publicly distributed for every version.
   tooling, and candidate preparation with checksums and release metadata.
 
 ### Fixed
+- Accept canonical Windows short-path aliases of the application's own document
+  after historical upgrades, while rejecting other pages and untrusted frames.
 - Reject malformed, interrupted, and oversized engine responses without crashing
   desktop IPC; recover corrupted saved layouts and retain model selections while
   engine metrics refresh.

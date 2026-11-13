@@ -152,10 +152,11 @@ jobs:
           body_path: dist/RELEASE-NOTES.md
 
   historical:
-    if: ${{ inputs.candidate_run_id }}
+    needs: dist
+    if: ${{ always() && (inputs.candidate_run_id || needs.dist.result == 'success') }}
     permissions:
       contents: write
       actions: read
     uses: ./.github/workflows/historical-upgrade.yml
     with:
-      candidate_run_id: ${{ inputs.candidate_run_id }}
+      candidate_run_id: ${{ inputs.candidate_run_id || format('{0}', github.run_id) }}

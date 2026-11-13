@@ -39,7 +39,7 @@ async function mainFixture() {
     if (name === './updates') return { ...actualRequire('./updates'), checkForUpdates: async () => ({ ok: true, releaseUrl: 'https://github.com/LehroSolutions/Lehrosol-Code/releases/tag/v2.4.3' }) };
     return actualRequire(name);
   };
-  vm.runInNewContext(fs.readFileSync(filename, 'utf8'), { require: fakeRequire, __dirname: path.dirname(filename), process, console, Set, Map, Promise, Buffer, TextDecoder });
+  vm.runInNewContext(fs.readFileSync(filename, 'utf8'), { require: fakeRequire, __dirname: path.dirname(filename), process, console, Set, Map, Promise, Buffer, TextDecoder, URL });
   await Promise.resolve();
   const event = () => ({ sender: win.webContents, senderFrame: win.webContents.mainFrame });
   return { handlers, event, win, preferences, permissionRequest, permissionCheck, confinement, opened, child: () => child };
@@ -60,6 +60,22 @@ test('async mission spawn error rejects gracefully without unhandled error', asy
   const result = f.handlers.get('lehro:streamStart')(f.event(), { id: 'm1', args: ['code', 'test'] });
   f.child().emit('error', new Error('ENOENT'));
   assert.equal((await result).ok, false);
+});
+
+test('IPC accepts canonical aliases of its own document and rejects other documents', async () => {
+  const f = await mainFixture();
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lc-page-alias-'));
+  try {
+    const alias = path.join(dir, 'application alias');
+    fs.symlinkSync(path.resolve(__dirname, '..'), alias, process.platform === 'win32' ? 'junction' : 'dir');
+    const page = require('node:url').pathToFileURL(path.join(alias, 'renderer', 'index.html')).href;
+    f.win.webContents.mainFrame.url = page;
+    assert.equal(f.handlers.get('lehro:info')(f.event()).appVersion, '2.4.2');
+    for (const url of [page + '?other=1', page + '#other', page.replace('index.html', 'styles.css'), 'https://evil.test', 'file://evil.test/share/index.html']) {
+      f.win.webContents.mainFrame.url = url;
+      assert.throws(() => f.handlers.get('lehro:info')(f.event()), /untrusted/);
+    }
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 test('active mission ids cannot replace a process and cancellation stops the child', async () => {
   const f = await mainFixture();

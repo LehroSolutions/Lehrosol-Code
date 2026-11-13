@@ -12,8 +12,21 @@ const bridge = require('./bridge');
 const confinement = require('./pathConfinement');
 const updates = require('./updates');
 const installation = require('./installation');
-const { pathToFileURL } = require('node:url');
+const { pathToFileURL, fileURLToPath } = require('node:url');
 const APP_PAGE = pathToFileURL(path.join(__dirname, '..', 'renderer', 'index.html')).href;
+const canonicalPage = (file) => {
+  const resolved = fs.realpathSync(file);
+  return process.platform === 'win32' ? resolved.toLowerCase() : resolved;
+};
+const APP_FILE = canonicalPage(fileURLToPath(APP_PAGE));
+function isAppPage(value) {
+  if (value === APP_PAGE) return true;
+  try {
+    const url = new URL(value);
+    if (url.protocol !== 'file:' || url.host || url.search || url.hash) return false;
+    return canonicalPage(fileURLToPath(url)) === APP_FILE;
+  } catch { return false; }
+}
 if (app.commandLine.hasSwitch('user-data-dir')) app.setPath('userData', app.commandLine.getSwitchValue('user-data-dir'));
 
 let win = null;
@@ -31,7 +44,7 @@ function send(channel, payload) {
 // navigated frame) must not reach the machine. Throwing rejects the renderer's
 // invoke promise, so no handler needs its own check.
 function guard(event) {
-  if (!win || win.isDestroyed() || !event || event.sender !== win.webContents || event.senderFrame !== win.webContents.mainFrame || event.senderFrame.url !== APP_PAGE) {
+  if (!win || win.isDestroyed() || !event || event.sender !== win.webContents || event.senderFrame !== win.webContents.mainFrame || !isAppPage(event.senderFrame.url)) {
     throw new Error('IPC rejected: untrusted sender');
   }
 }

@@ -1,0 +1,49 @@
+name: Historical upgrade acceptance
+on:
+  workflow_call:
+    inputs:
+      candidate_run_id:
+        required: true
+        type: string
+  workflow_dispatch:
+    inputs:
+      candidate_run_id:
+        description: Successful Release workflow run containing the candidate
+        required: true
+        type: string
+permissions:
+  contents: write
+  actions: read
+jobs:
+  upgrade:
+    runs-on: windows-2022
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22.13'
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Download verified candidate and historical installer
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CANDIDATE_RUN_ID: ${{ inputs.candidate_run_id }}
+        run: |
+          if ($env:CANDIDATE_RUN_ID -notmatch '^\d+$') { throw 'Expected a numeric workflow run ID' }
+          gh run download $env:CANDIDATE_RUN_ID --repo $env:GITHUB_REPOSITORY --name windows-installer --dir dist/historical-candidate
+          if ($LASTEXITCODE -ne 0) { throw 'Candidate download failed' }
+          gh release download v2.4.1 --repo $env:GITHUB_REPOSITORY --pattern 'Lehrosol.Code.Setup.2.4.1.exe' --pattern SHA256SUMS --dir dist/historical-release
+          if ($LASTEXITCODE -ne 0) { throw 'Historical release download failed' }
+      - name: Prepare runtime acceptance driver
+        run: pnpm verify:installation -PrepareOnly
+      - name: Verify historical installation and upgrade
+        run: node scripts/verify-historical.cjs
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: historical-upgrade-qa
+          path: dist/qa/historical/
+          if-no-files-found: warn

@@ -201,15 +201,15 @@ const evaluate = async expression => {
     socket.addEventListener('error', error => { clearTimeout(timer); reject(error); }, { once: true });
   });
   await send('Runtime.enable');
-  while (!(await evaluate('Boolean(window.lehro && typeof state !== "undefined" && state.info && state.info.appVersion)'))) {
+  while (!(await evaluate('Boolean(window.lehro && typeof state !== "undefined" && state.info && (state.info.appVersion || state.info.cliVersion))'))) {
     if (Date.now() >= deadline) throw new Error('Installed renderer did not become ready');
     await delay(200);
   }
   const info = await evaluate('window.lehro.info()');
-  assert.equal(info.appVersion, expectedVersion);
+  if (stage !== 'historical') assert.equal(info.appVersion, expectedVersion);
   assert.equal(path.resolve(info.home), path.resolve(home));
   await evaluate('document.querySelector(\'[data-view="settings"]\').click()');
-  if (stage === 'old') {
+  if (stage === 'old' || stage === 'historical') {
     await evaluate(`document.getElementById('setAuto').checked=false;document.getElementById('setTheme').value='light';document.getElementById('setPort').value='31457';document.getElementById('btnSaveSettings').click();true`);
     assert.equal(await evaluate(`localStorage.getItem('lc.autoServe')`), '0');
   } else {

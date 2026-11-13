@@ -5,6 +5,11 @@ on:
     tags:
       - "v*"
   workflow_dispatch:
+    inputs:
+      candidate_run_id:
+        description: Optional existing candidate run to verify a historical upgrade only
+        required: false
+        type: string
 
 # Publishing a GitHub Release requires write access to contents.
 permissions:
@@ -16,6 +21,7 @@ concurrency:
 
 jobs:
   dist:
+    if: ${{ !inputs.candidate_run_id }}
     name: build windows installer
     runs-on: windows-latest
     timeout-minutes: 30
@@ -144,3 +150,12 @@ jobs:
           draft: true
           make_latest: false
           body_path: dist/RELEASE-NOTES.md
+
+  historical:
+    if: ${{ inputs.candidate_run_id }}
+    permissions:
+      contents: write
+      actions: read
+    uses: ./.github/workflows/historical-upgrade.yml
+    with:
+      candidate_run_id: ${{ inputs.candidate_run_id }}

@@ -12,6 +12,16 @@ runtime, installation, integrity or update checks remain blockers. Keep the
 unsigned disclosure and SHA256SUMS with each installer. This decision does not
 waive the Windows 11 acceptance checks below.
 
+The unsigned packaging configuration uses `win.signAndEditExecutable: false`
+and `disableAsarIntegrity: true` to retain the stock Electron executable bytes.
+The application's window, installer identity and UI branding remain configured;
+Explorer properties for the application executable retain upstream metadata.
+The embedded ASAR-validation fuse was already disabled and stays unchanged.
+Per-file ASAR hash/block metadata, the renderer sandbox, context isolation and
+IPC guards are preserved. Source, archive, executable and installer payload
+hash checks remain release gates. A future change to signing, executable
+resources or embedded validation needs a new complete packaging acceptance run.
+
 ## Prepare a candidate
 
 Use Node.js 22.13.0+ and pnpm 11.15.1:

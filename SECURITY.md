@@ -175,6 +175,7 @@ against reality rather than against an imagined architecture:
 | Navigation and IPC frame           | **restricted** | The app blocks in-window external navigation and validates the caller's application frame before privileged IPC. |
 | External update links              | **validated** | Update feed and download URLs are restricted to the official repository and expected release/asset paths. Release notes are rendered as text. |
 | Code signing                        | **absent**   | Windows installers are **not currently code-signed**. See "Reporters, please note" below. Signing setup is tracked in `.github/workflows/release.yml`. |
+| Embedded ASAR validation             | **not enabled** | The existing runtime fuse remains disabled. Per-file ASAR hash metadata is retained, and release tooling verifies the complete archive and installer payload. These build-time checks are not runtime signature enforcement. |
 
 ### Reporters, please note
 

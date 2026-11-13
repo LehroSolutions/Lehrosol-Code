@@ -28,6 +28,7 @@ async function check(name, fn) { const result = await fn(); assert.equal(result.
 (async () => {
   await new Promise((done) => server.listen(0, '127.0.0.1', done));
   const port = server.address().port;
+  fs.writeFileSync(path.join(temp, 'home', 'serve.json'), JSON.stringify({ model: 'contract-engine', port, baseUrl: `http://127.0.0.1:${port}/v1` }));
   const info = bridge.info(); assert.ok(info.cliVersion);
   for (const [name, fn] of [['vault', bridge.vault], ['tui snapshot', bridge.snapshot], ['adapters', bridge.adaptersList], ['modes', bridge.modesList], ['engrams', () => bridge.engramsList(5)]]) await check(name, fn);
   const diagnostics = await bridge.doctor();

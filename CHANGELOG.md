@@ -7,6 +7,26 @@ installer was publicly distributed for every version.
 
 ## [Unreleased]
 
+## [2.4.3] — 2026-11-13 (release candidate)
+
+### Fixed
+- Package the unmodified Electron runtime for the unsigned Windows installer.
+  The prior resource-edited executable passed clean Windows CI but failed to
+  open a renderer on the Windows 11 development host. The stock-runtime probe
+  passed all 21 packaged workflows and cold reopening on that host.
+- Preserve the existing renderer sandbox, context isolation, IPC restrictions,
+  fuse settings and per-file ASAR hash metadata. Release preparation still
+  verifies the complete application archive and exact installer payload bytes.
+- Respect the tracked synthetic engine endpoint during installed CLI contract
+  checks, avoiding unrelated model discovery in the verification fixture.
+
+### Release notes
+- Includes the 2.4.2 mission-output, workspace-layout, appearance, measured-usage,
+  engine-inspection and verified manual-update features described below.
+- Installers remain intentionally unsigned. Windows Explorer properties for the
+  application executable retain upstream Electron metadata; About and the
+  installer identify the Lehrosol Code version.
+
 ## [2.4.2] — 2026-11-13 (release candidate)
 
 ### Added

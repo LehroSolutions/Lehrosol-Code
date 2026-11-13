@@ -2,7 +2,7 @@
   "name": "lehrosol-code",
   "productName": "Lehrosol Code",
   "private": true,
-  "version": "2.4.2",
+  "version": "2.4.3",
   "description": "Lehrosol Code — the agentic engineering IDE for local models. The desktop front-end of LehroSol: model vault, agent missions, live system graph, and an editor with AI suggestions, all running against GGUFs on your own drive.",
   "license": "Apache-2.0",
   "author": "Lehro Solutions",
@@ -36,6 +36,7 @@
   "build": {
     "appId": "solutions.lehro.lehrosolcode",
     "productName": "Lehrosol Code",
+    "disableAsarIntegrity": true,
     "files": [
       "electron/**",
       "renderer/**",
@@ -48,7 +49,8 @@
     "win": {
       "target": "nsis",
       "artifactName": "Lehrosol.Code.Setup.${version}.exe",
-      "icon": "build/icon.ico"
+      "icon": "build/icon.ico",
+      "signAndEditExecutable": false
     },
     "nsis": {
       "guid": "f487ccb7-2921-5fe7-8c43-cc99c9874470",

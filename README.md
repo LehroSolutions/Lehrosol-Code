@@ -6,10 +6,15 @@ models, start an engine, edit a project, run coding missions, review AI
 suggestions, and compare model output from one application. The desktop and CLI
 share the model vault and state home, normally `%USERPROFILE%\.lehro`.
 
-Version **2.4.2 is a release candidate**. Tagged builds create a draft Windows
+Version **2.4.3 is a release candidate**. Tagged builds create a draft Windows
 installer release for review. Installers are unsigned unless signing credentials
 were supplied for that build. See [the release guide](RELEASING.md) for promotion
 checks and the distinction between automated checks and installation acceptance.
+
+The unsigned build uses the unmodified Electron runtime. Windows Explorer file
+properties for the application executable retain Electron metadata; use About
+for the Code version. The installer and the application interface retain Code's
+name and branding.
 
 [Releases](https://github.com/LehroSolutions/Lehrosol-Code/releases) ·
 [CI](https://github.com/LehroSolutions/Lehrosol-Code/actions/workflows/ci.yml) ·

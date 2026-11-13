@@ -1,5 +1,10 @@
 # LehroSol Code release audit — 13 November 2026
 
+**Replacement packaging:** [2.4.3 acceptance](RELEASE-2.4.3-ACCEPTANCE.md)
+records the stock-runtime configuration that passed all 21 workflows on the
+Windows 11 host. The 2.4.2 findings below remain historical evidence for those
+candidate bytes.
+
 **Latest follow-up:** [RELEASE-REVIEW-2026-11-13.md](RELEASE-REVIEW-2026-11-13.md)
 records fresh failures against the Windows 11 documentation candidate and the
 owner's accepted unsigned release policy. The earlier candidate evidence below

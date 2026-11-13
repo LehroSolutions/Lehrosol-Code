@@ -4,19 +4,38 @@
 // zero-setup GGUF scanner, all against fakes (no real CLI or engine needed).
 const test = require('node:test');
 const assert = require('node:assert');
-const { mkdtempSync, writeFileSync, mkdirSync, truncateSync, chmodSync } = require('node:fs');
-const { join } = require('node:path');
+const { mkdtempSync: createTempDirectory, writeFileSync, mkdirSync, truncateSync, chmodSync, rmSync } = require('node:fs');
+const { join, resolve, sep } = require('node:path');
 const { tmpdir } = require('node:os');
 const http = require('node:http');
 
 const bridge = require('../electron/bridge');
+const temporaryDirectories = new Set();
+function mkdtempSync(prefix) {
+  const dir = createTempDirectory(prefix);
+  temporaryDirectories.add(dir);
+  return dir;
+}
+test.after(() => {
+  for (const dir of temporaryDirectories) {
+    assert.ok(resolve(dir).startsWith(resolve(tmpdir()) + sep));
+    rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+  }
+});
+
+function sizedModel(file, size) {
+  writeFileSync(file, 'x');
+  if (process.platform === 'win32') require('node:child_process').execFileSync('fsutil.exe', ['sparse', 'setflag', file], { windowsHide: true, timeout: 5000, stdio: 'pipe' });
+  truncateSync(file, size);
+}
 
 function makeFakeCli(dir) {
   const file = join(dir, 'fake-lehrosol.js');
   writeFileSync(file, `
 const args = process.argv.slice(2);
 if (args[0] === 'vault' && args[1] === 'add-root') {
-  console.log(JSON.stringify({ ok: true, added: args[2], roots: ['/models', args[2]] }));
+  if (args[2] !== '--path' || !args[3]) { console.log(JSON.stringify({ ok: false, reason: 'missing-path' })); process.exit(1); }
+  console.log(JSON.stringify({ ok: true, added: args[3], roots: ['/models', args[3]] }));
 } else if (args[0] === 'vault') {
   console.log(JSON.stringify({ ok: true, models: [{ id: 'alpha-7b-Q4_K_M', fit: 'great' }], roots: ['/models'] }));
 } else if (args[0] === 'tui') {
@@ -91,6 +110,17 @@ test('windows cmd line survives paths with spaces (Home Station bug)', () => {
   assert.strictEqual(bridge.winCmdQuote('say "hi"'), '"say ""hi"""');
 });
 
+test('runJson preserves Unicode split across subprocess output chunks', async (t) => {
+  const dir = mkdtempSync(join(tmpdir(), 'lc-unicode-'));
+  const file = join(dir, 'cli.js');
+  t.after(() => require('node:fs').rmSync(dir, { recursive: true, force: true }));
+  writeFileSync(file, `const text=Buffer.from(JSON.stringify({ok:true,answer:'héllo 🌍'}));const split=text.indexOf(Buffer.from('🌍'))+2;process.stdout.write(text.subarray(0,split));setTimeout(()=>process.stdout.write(text.subarray(split)),100);`);
+  process.env.LEHROSOL_BIN = file;
+  const result = await bridge.runJson([]);
+  assert.equal(result.ok, true);
+  assert.equal(result.data.answer, 'héllo 🌍');
+});
+
 test('findLehrosol honours LEHROSOL_BIN and flags .js for node execution', () => {
   const dir = mkdtempSync(join(tmpdir(), 'lc-'));
   const fake = makeFakeCli(dir);
@@ -118,6 +148,72 @@ test('runJson tolerates banner noise and reports failures', async () => {
   const fail = await bridge.runJson(['fail']);
   assert.strictEqual(fail.ok, false);
   assert.match(fail.raw, /something broke/);
+});
+
+test('runJson rejects successful JSON from a CLI with a failing exit code', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'lc-exit-'));
+  const cli = join(dir, 'cli.js');
+  writeFileSync(cli, 'console.log(JSON.stringify({ok:true,answer:42})); process.exitCode=7;');
+  process.env.LEHROSOL_BIN = cli;
+  const result = await bridge.runJson([]);
+  assert.strictEqual(result.ok, false);
+  assert.strictEqual(result.exitCode, 7);
+  assert.strictEqual(result.data.answer, 42);
+  assert.match(result.error, /code 7/);
+});
+
+test('runJson reports a timeout even after the CLI emitted successful JSON', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'lc-timeout-'));
+  const cli = join(dir, 'cli.js');
+  const marker = join(dir, 'started.txt');
+  writeFileSync(cli, `require('node:fs').writeFileSync(${JSON.stringify(marker)},'started'); console.log(JSON.stringify({ok:true})); setInterval(()=>{},1000);`);
+  process.env.LEHROSOL_BIN = cli;
+  const result = await bridge.runJson([], 2000);
+  assert.ok(require('node:fs').existsSync(marker), 'fixture must reach its emitted JSON before the deadline');
+  assert.strictEqual(result.ok, false);
+  assert.strictEqual(result.code, 'ETIMEDOUT');
+  assert.match(result.error, /timed out/);
+  assert.strictEqual(result.data.ok, true);
+});
+
+test('runJson bounds excessive CLI output and reports the limit', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'lc-output-'));
+  const cli = join(dir, 'cli.js');
+  writeFileSync(cli, "process.stdout.write('x'.repeat(9*1024*1024)); setInterval(()=>{},1000);");
+  process.env.LEHROSOL_BIN = cli;
+  const result = await bridge.runJson([], 10000);
+  assert.strictEqual(result.ok, false);
+  assert.strictEqual(result.code, 'EOUTPUTLIMIT');
+  assert.match(result.error, /output limit/);
+  assert.ok(result.raw.length <= 4000);
+});
+
+test('known Windows npm shims execute their JS entry without shell argument expansion', { skip: process.platform !== 'win32' }, async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'lc-npm-shim-'));
+  const bin = join(dir, 'node_modules', '@lehrosolutions', 'cli', 'bin');
+  mkdirSync(bin, { recursive: true });
+  const file = join(bin, 'lehrosol.js');
+  writeFileSync(file, 'console.log(JSON.stringify({ok:true,args:process.argv.slice(2)}));');
+  const shim = join(dir, 'lehrosol.cmd');
+  writeFileSync(shim, '@echo off\nnode "%dp0%\\node_modules\\@lehrosolutions\\cli\\bin\\lehrosol.js" %*');
+  process.env.LEHROSOL_BIN = shim;
+  const found = bridge.findLehrosol();
+  assert.strictEqual(found.viaNode, true);
+  assert.strictEqual(found.cmd, file);
+  const args = ['code', 'Keep %PATH%, "quotes", & shell characters\nand a second line literal.'];
+  const result = await bridge.runJson(args);
+  assert.strictEqual(result.ok, true);
+  assert.deepStrictEqual(result.data.args, args);
+});
+
+test('custom Windows shell wrappers reject arguments they cannot safely preserve', { skip: process.platform !== 'win32' }, async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'lc-custom-shim-'));
+  const shim = join(dir, 'custom.cmd');
+  writeFileSync(shim, '@echo off\necho %*');
+  process.env.LEHROSOL_BIN = shim;
+  const result = await bridge.runJson(['code', '%PATH%']);
+  assert.strictEqual(result.ok, false);
+  assert.match(result.error, /Locate bin\/lehrosol\.js/);
 });
 
 test('parseJsonLoose extracts embedded JSON and rejects junk', () => {
@@ -178,7 +274,7 @@ test('chatOnce measures a completion round-trip with tokens/sec', async () => {
       const parsed = JSON.parse(body);
       assert.strictEqual(parsed.messages[parsed.messages.length - 1].role, 'user');
       res.writeHead(200, { 'content-type': 'application/json' });
-      res.end(JSON.stringify({ choices: [{ message: { content: 'hello from local model' } }], usage: { completion_tokens: 12, prompt_tokens: 5 } }));
+      res.end(JSON.stringify({ choices: [{ message: { content: 'hello from local model' }, finish_reason: 'length' }], usage: { completion_tokens: 12, prompt_tokens: 5 } }));
     });
   });
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
@@ -188,6 +284,7 @@ test('chatOnce measures a completion round-trip with tokens/sec', async () => {
   assert.strictEqual(res.ok, true);
   assert.strictEqual(res.text, 'hello from local model');
   assert.strictEqual(res.tokens, 12);
+  assert.strictEqual(res.finishReason, 'length');
   assert.ok(typeof res.tokPerSec === 'number');
   assert.strictEqual(sawAuth, 'Bearer k');
 });
@@ -198,16 +295,54 @@ test('chatOnce reports unreachable engines cleanly', async () => {
   assert.ok(res.error);
 });
 
+test('engine JSON preserves Unicode across response chunks', async (t) => {
+  const server = http.createServer((req, res) => {
+    req.resume();
+    const response = req.url === '/v1/models' ? { data: [{ id: 'model 🌍' }] } : { choices: [{ message: { content: 'héllo 🌍' } }] };
+    const bytes = Buffer.from(JSON.stringify(response));
+    const split = bytes.indexOf(Buffer.from('🌍')) + 2;
+    res.write(bytes.subarray(0, split));
+    setTimeout(() => res.end(bytes.subarray(split)), 50);
+  });
+  await new Promise((done) => server.listen(0, '127.0.0.1', done));
+  t.after(() => new Promise((done) => { server.closeAllConnections(); server.close(done); }));
+  const port = server.address().port;
+  assert.deepEqual((await bridge.pingServer(port)).models, ['model 🌍']);
+  assert.equal((await bridge.chatOnce({ port, prompt: 'hello' })).text, 'héllo 🌍');
+});
+
+test('engine responses reject malformed content, oversized bodies, and interrupted transfers', async (t) => {
+  let response = { data: [null, {}, { id: 'alpha' }] };
+  let interrupted = false;
+  const server = http.createServer((req, res) => {
+    req.resume();
+    if (interrupted) { res.writeHead(200); res.write('{'); setImmediate(() => res.destroy()); return; }
+    res.end(typeof response === 'string' ? response : JSON.stringify(response));
+  });
+  await new Promise((done) => server.listen(0, '127.0.0.1', done));
+  t.after(() => new Promise((done) => { server.closeAllConnections(); server.close(done); }));
+  const port = server.address().port;
+  assert.deepEqual((await bridge.pingServer(port)).models, ['alpha']);
+  response = 'not JSON';
+  assert.equal((await bridge.pingServer(port)).ok, false);
+  response = 'x'.repeat(512 * 1024 + 1);
+  assert.match((await bridge.pingServer(port)).error, /limit/);
+  response = { choices: [{ message: { content: { unexpected: true } } }] };
+  assert.match((await bridge.chatOnce({ port, prompt: 'hello' })).error, /non-text/);
+  response = 'x'.repeat(8 * 1024 * 1024 + 1);
+  assert.match((await bridge.chatOnce({ port, prompt: 'hello' })).error, /limit/);
+  interrupted = true;
+  assert.equal((await bridge.pingServer(port)).ok, false);
+  assert.equal((await bridge.chatOnce({ port, prompt: 'hello' })).ok, false);
+});
+
 test('nativeScan finds GGUF models, rates fit, and pairs projectors', () => {
   const root = mkdtempSync(join(tmpdir(), 'lc-models-'));
   const alphaDir = join(root, 'alpha-7b');
   mkdirSync(alphaDir);
-  writeFileSync(join(alphaDir, 'alpha-7b-Q4_K_M.gguf'), 'x');
-  truncateSync(join(alphaDir, 'alpha-7b-Q4_K_M.gguf'), 300 * 1024 * 1024);
-  writeFileSync(join(alphaDir, 'mmproj-alpha.gguf'), 'x');
-  truncateSync(join(alphaDir, 'mmproj-alpha.gguf'), 50 * 1024 * 1024);
-  writeFileSync(join(root, 'beta-1b-IQ4_XS.gguf'), 'x');
-  truncateSync(join(root, 'beta-1b-IQ4_XS.gguf'), 200 * 1024 * 1024);
+  sizedModel(join(alphaDir, 'alpha-7b-Q4_K_M.gguf'), 300 * 1024 * 1024);
+  sizedModel(join(alphaDir, 'mmproj-alpha.gguf'), 50 * 1024 * 1024);
+  sizedModel(join(root, 'beta-1b-IQ4_XS.gguf'), 200 * 1024 * 1024);
   const scan = bridge.nativeScan([root]);
   const ids = scan.models.map((m) => m.id);
   assert.ok(ids.includes('alpha-7b'), `expected alpha-7b in ${ids}`);
@@ -246,6 +381,30 @@ test('cliVersion handshakes with the CLI --version banner', () => {
   makeFakeCli(dir);
   process.env.LEHROSOL_BIN = join(dir, 'fake-lehrosol.js');
   assert.strictEqual(bridge.cliVersion(), '9.9.9-test');
+});
+
+test('CLI version cache follows a newly located CLI and an in-place upgrade', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'lc-version-'));
+  const first = join(dir, 'first.js');
+  const second = join(dir, 'second.js');
+  writeFileSync(first, "console.log('LehroSol CLI v1.2.3');");
+  writeFileSync(second, "console.log('LehroSol CLI v4.5.6');");
+  process.env.LEHROSOL_BIN = first;
+  assert.strictEqual(bridge.cliVersion(), '1.2.3');
+  process.env.LEHROSOL_BIN = second;
+  assert.strictEqual(bridge.cliVersion(), '4.5.6');
+  writeFileSync(second, "console.log('LehroSol CLI v10.11.12');");
+  assert.strictEqual(bridge.info().cliVersion, '10.11.12');
+});
+
+test('a failed CLI version handshake is retried instead of cached', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'lc-version-retry-'));
+  const cli = join(dir, 'retry.js');
+  const marker = join(dir, 'attempted.txt');
+  writeFileSync(cli, `const fs=require('node:fs'); const marker=${JSON.stringify(marker)}; if(!fs.existsSync(marker)){ fs.writeFileSync(marker,'1'); console.log('LehroSol CLI v0.0.0'); process.exitCode=1; } else console.log('LehroSol CLI v3.2.0');`);
+  process.env.LEHROSOL_BIN = cli;
+  assert.strictEqual(bridge.cliVersion(), null);
+  assert.strictEqual(bridge.cliVersion(), '3.2.0');
 });
 
 test('engramsList fetches the distilled memory book (v3.2 rename)', async () => {

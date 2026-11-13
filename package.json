@@ -2,7 +2,7 @@
   "name": "lehrosol-code",
   "productName": "Lehrosol Code",
   "private": true,
-  "version": "2.4.1",
+  "version": "2.4.2",
   "description": "Lehrosol Code — the agentic engineering IDE for local models. The desktop front-end of LehroSol: model vault, agent missions, live system graph, and an editor with AI suggestions, all running against GGUFs on your own drive.",
   "license": "Apache-2.0",
   "author": "Lehro Solutions",
@@ -21,12 +21,17 @@
   },
   "scripts": {
     "start": "node scripts/start.js",
-    "test": "node --test \"test-app/*.test.js\"",
-    "dist": "electron-builder --win --publish=never"
+    "check": "node scripts/check.mjs",
+    "test": "node --import ./test-app/setup.mjs --test \"test-app/*.test.js\"",
+    "smoke": "node scripts/smoke.cjs",
+    "verify:installation": "powershell.exe -NoProfile -NonInteractive -File scripts/verify-installation.ps1",
+    "dist": "electron-builder --win --x64 --publish=never",
+    "release:prepare": "node scripts/release.mjs"
   },
   "devDependencies": {
-    "electron": "^44.5.1",
-    "electron-builder": "^26.15.3"
+    "electron": "^45.3.0",
+    "electron-builder": "^26.18.0",
+    "playwright": "1.61.1"
   },
   "build": {
     "appId": "solutions.lehro.lehrosolcode",
@@ -34,11 +39,23 @@
     "files": [
       "electron/**",
       "renderer/**",
+      "docs/**",
+      "LICENSE",
+      "NOTICE",
+      "CHANGELOG.md",
       "package.json"
     ],
     "win": {
       "target": "nsis",
+      "artifactName": "Lehrosol.Code.Setup.${version}.exe",
       "icon": "build/icon.ico"
+    },
+    "nsis": {
+      "guid": "f487ccb7-2921-5fe7-8c43-cc99c9874470",
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "deleteAppDataOnUninstall": false,
+      "runAfterFinish": false
     }
   }
 }

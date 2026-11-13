@@ -1,20 +1,33 @@
 'use strict';
 // Lehrosol Code — Electron main process. Owns the window, the terminal
 // shells, mission streams, and all filesystem/CLI access. The renderer runs
-// with contextIsolation on, nodeIntegration off, and no remote module, and it
-// has no direct filesystem access — the Chromium sandbox, however, is
-// currently DISABLED (see webPreferences.sandbox). The security model
-// therefore rests on the narrow invoke-only bridge in preload.js plus two
-// invariants enforced here: every IPC call must come from this window's own
-// webContents (guard), and every project path must land inside a folder the
-// user picked in a native dialog (pathConfinement). Turning the sandbox on is
-// tracked follow-up work — it needs preload.js reworked first.
+// with context isolation, Chromium sandboxing, and no Node integration.
+// Privileged calls require the application's top-level frame and project
+// paths remain inside explicitly selected folders.
 const { app, BrowserWindow, ipcMain, dialog, shell, session } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs');
 const { spawn } = require('node:child_process');
 const bridge = require('./bridge');
 const confinement = require('./pathConfinement');
+const updates = require('./updates');
+const installation = require('./installation');
+const { pathToFileURL, fileURLToPath } = require('node:url');
+const APP_PAGE = pathToFileURL(path.join(__dirname, '..', 'renderer', 'index.html')).href;
+const canonicalPage = (file) => {
+  const resolved = fs.realpathSync(file);
+  return process.platform === 'win32' ? resolved.toLowerCase() : resolved;
+};
+const APP_FILE = canonicalPage(fileURLToPath(APP_PAGE));
+function isAppPage(value) {
+  if (value === APP_PAGE) return true;
+  try {
+    const url = new URL(value);
+    if (url.protocol !== 'file:' || url.host || url.search || url.hash) return false;
+    return canonicalPage(fileURLToPath(url)) === APP_FILE;
+  } catch { return false; }
+}
+if (app.commandLine.hasSwitch('user-data-dir')) app.setPath('userData', app.commandLine.getSwitchValue('user-data-dir'));
 
 let win = null;
 const missionStreams = new Map();
@@ -31,7 +44,7 @@ function send(channel, payload) {
 // navigated frame) must not reach the machine. Throwing rejects the renderer's
 // invoke promise, so no handler needs its own check.
 function guard(event) {
-  if (!win || win.isDestroyed() || !event || event.sender !== win.webContents) {
+  if (!win || win.isDestroyed() || !event || event.sender !== win.webContents || event.senderFrame !== win.webContents.mainFrame || !isAppPage(event.senderFrame.url)) {
     throw new Error('IPC rejected: untrusted sender');
   }
 }
@@ -50,35 +63,104 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: false, // deliberate: preload.js needs Node. See the header note.
+      sandbox: true,
     },
   });
   win.loadFile(path.join(__dirname, '..', 'renderer', 'index.html'));
+  win.webContents.on('will-navigate', (event) => event.preventDefault());
+  win.webContents.on('will-prevent-unload', (event) => {
+    const choice = dialog.showMessageBoxSync(win, { type: 'question', buttons: ['Keep editing', 'Discard and close'], defaultId: 0, cancelId: 0, message: 'Close with unsaved changes?', detail: 'Changes in your open files will be discarded.' });
+    if (choice === 1) event.preventDefault();
+  });
   win.webContents.setWindowOpenHandler(({ url }) => {
-    if (/^https?:/i.test(url)) shell.openExternal(url);
+    if (updates.trustedUrl(url)) shell.openExternal(url).catch(() => {});
     return { action: 'deny' };
   });
 }
 
 app.whenReady().then(() => {
   // The app needs no camera, mic, geolocation, notifications, or MIDI.
-  session.defaultSession.setPermissionRequestHandler((_wc, _permission, cb) => cb({ action: 'deny' }));
+  session.defaultSession.setPermissionRequestHandler((_wc, _permission, cb) => cb(false));
+  session.defaultSession.setPermissionCheckHandler(() => false);
   createWindow();
 });
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
 app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
-app.on('before-quit', () => {
-  for (const child of missionStreams.values()) { try { child.kill(); } catch { /* gone */ } }
-  for (const term of terminals.values()) { try { term.kill(); } catch { /* gone */ } }
+app.on('will-quit', () => {
+  for (const child of missionStreams.values()) stopChild(child);
+  for (const term of terminals.values()) stopChild(term);
+});
+
+function stopChild(child) {
+  if (!child || !child.pid || child.exitCode !== null) return false;
+  if (process.platform === 'win32') {
+    const killer = spawn('taskkill.exe', ['/pid', String(child.pid), '/T', '/F'], { windowsHide: true });
+    killer.on('error', () => { try { child.kill(); } catch {} });
+  } else { try { child.kill(); } catch {} }
+  return true;
+}
+
+function startStream(map, id, child, dataChannel, endChannel) {
+  return new Promise((resolve) => {
+    map.set(id, child);
+    child.stdout.setEncoding('utf8');
+    child.stderr.setEncoding('utf8');
+    child.stdout.on('data', (d) => send(dataChannel, { id, chunk: d.toString() }));
+    child.stderr.on('data', (d) => send(dataChannel, { id, chunk: d.toString() }));
+    let failed = false;
+    child.once('spawn', () => resolve({ ok: true, pid: child.pid }));
+    child.on('error', (err) => {
+      failed = true;
+      if (map.get(id) === child) map.delete(id);
+      send(dataChannel, { id, chunk: `Unable to start: ${err.message}\n` });
+      send(endChannel, { id, code: 1, error: err.message });
+      resolve({ ok: false, error: err.message });
+    });
+    child.on('close', (code) => {
+      if (map.get(id) === child) map.delete(id);
+      if (!failed) send(endChannel, { id, code });
+    });
+  });
+}
+
+let updateCheck = null;
+const approvedReleaseLinks = new Set();
+ipcMain.handle('app:checkUpdates', async (e) => {
+  guard(e);
+  if (!updateCheck) updateCheck = updates.checkForUpdates(app.getVersion()).finally(() => { updateCheck = null; });
+  const [release, detected] = await Promise.all([
+    updateCheck,
+    installation.detectInstallation({ packaged: app.isPackaged }),
+  ]);
+  const result = { ...release, installedNotes: updates.installedReleaseNotes(app.getVersion()), installation: detected };
+  for (const url of [result.releaseUrl, result.installerUrl, result.checksumUrl]) if (url) approvedReleaseLinks.add(url);
+  return result;
+});
+ipcMain.handle('app:openRelease', async (e, url) => {
+  guard(e);
+  if (typeof url !== 'string' || !approvedReleaseLinks.has(url) || (!updates.trustedUrl(url) && !updates.trustedUrl(url, 'asset'))) return { ok: false, error: 'Unverified release link' };
+  try { await shell.openExternal(url); return { ok: true }; } catch (err) { return { ok: false, error: err.message }; }
+});
+ipcMain.handle('app:openHelp', async (e) => {
+  guard(e);
+  try {
+    const dir = path.join(app.getPath('userData'), 'help', app.getVersion());
+    fs.mkdirSync(dir, { recursive: true });
+    for (const file of ['glossary.html', 'USER-GUIDE.md']) fs.writeFileSync(path.join(dir, file), fs.readFileSync(path.join(__dirname, '..', 'docs', file)));
+    const error = await shell.openPath(path.join(dir, 'glossary.html'));
+    return error ? { ok: false, error } : { ok: true };
+  } catch (err) { return { ok: false, error: err.message }; }
 });
 
 // ---- CLI awareness ---------------------------------------------------------
-ipcMain.handle('lehro:info', (e) => { guard(e); return bridge.info(); });
+ipcMain.handle('lehro:info', (e) => { guard(e); return { ...bridge.info(), appVersion: app.getVersion() }; });
 ipcMain.handle('lehro:runJson', (e, { args, timeoutMs }) => { guard(e); return bridge.runJson((Array.isArray(args) ? args : []).map(String), timeoutMs ? Number(timeoutMs) : undefined); });
 ipcMain.handle('lehro:snapshot', (e) => { guard(e); return bridge.snapshot(); });
 ipcMain.handle('lehro:vault', (e) => { guard(e); return bridge.vault(); });
 ipcMain.handle('lehro:addRoot', (e, { dir }) => { guard(e); return bridge.addVaultRoot(String(dir)); });
 ipcMain.handle('lehro:serveState', (e) => { guard(e); return bridge.serveState(); });
+ipcMain.handle('lehro:usage', (e, { days } = {}) => { guard(e); return bridge.usage(days); });
+ipcMain.handle('lehro:engineDetails', (e, opts = {}) => { guard(e); return bridge.engineDetails(opts); });
 ipcMain.handle('lehro:ping', (e, { port, apiKey }) => { guard(e); return bridge.pingServer(Number(port), apiKey ? String(apiKey) : undefined); });
 ipcMain.handle('lehro:nativeScan', (e, { extraDirs } = {}) => { guard(e); return bridge.nativeScan(Array.isArray(extraDirs) ? extraDirs.map(String) : []); });
 ipcMain.handle('lehro:chat', (e, opts) => { guard(e); return bridge.chatOnce(opts || {}); });
@@ -100,9 +182,9 @@ ipcMain.handle('lehro:cpuLoad', (e, { sampleMs } = {}) => { guard(e); return bri
 // renderer, re-applied on boot) — no environment fiddling required.
 ipcMain.handle('lehro:setCliPath', (e, { cliPath }) => {
   guard(e);
-  if (cliPath && fs.existsSync(String(cliPath))) {
-    process.env.LEHROSOL_BIN = String(cliPath);
-    return { ok: true, ...bridge.info() };
+  if (typeof cliPath === 'string' && path.isAbsolute(cliPath) && fs.existsSync(cliPath) && fs.statSync(cliPath).isFile() && /\.(?:m?js|cmd|bat|exe)$/i.test(cliPath)) {
+    process.env.LEHROSOL_BIN = cliPath;
+    return { ok: true, ...bridge.info(), appVersion: app.getVersion() };
   }
   return { ok: false, error: 'File not found', ...bridge.info() };
 });
@@ -116,12 +198,10 @@ ipcMain.handle('lehro:pickFile', async (e) => {
 ipcMain.handle('lehro:streamStart', (e, { id, args, cwd }) => {
   guard(e);
   try {
+    if (typeof id !== 'string' || !id || missionStreams.has(id)) return { ok: false, error: 'Invalid or active mission id' };
+    if (cwd) { const target = confinement.resolveInside(cwd); if (!target.ok) return target; cwd = target.path; }
     const child = bridge.spawnCli((Array.isArray(args) ? args : []).map(String), { cwd: cwd || undefined });
-    missionStreams.set(String(id), child);
-    child.stdout.on('data', (d) => send('lehro:streamData', { id, chunk: d.toString() }));
-    child.stderr.on('data', (d) => send('lehro:streamData', { id, chunk: d.toString() }));
-    child.on('close', (code) => { missionStreams.delete(String(id)); send('lehro:streamEnd', { id, code }); });
-    return { ok: true, pid: child.pid };
+    return startStream(missionStreams, id, child, 'lehro:streamData', 'lehro:streamEnd');
   } catch (err) {
     return { ok: false, error: err.message };
   }
@@ -129,7 +209,7 @@ ipcMain.handle('lehro:streamStart', (e, { id, args, cwd }) => {
 ipcMain.handle('lehro:streamStop', (e, { id }) => {
   guard(e);
   const child = missionStreams.get(String(id));
-  if (child) { try { child.kill(); } catch { /* gone */ } }
+  if (child) stopChild(child);
   return { ok: Boolean(child) };
 });
 
@@ -137,14 +217,13 @@ ipcMain.handle('lehro:streamStop', (e, { id }) => {
 ipcMain.handle('term:create', (e, { id, cwd }) => {
   guard(e);
   const shellBin = process.platform === 'win32' ? 'powershell.exe' : (process.env.SHELL || 'bash');
-  const shellArgs = process.platform === 'win32' ? ['-NoLogo'] : ['-i'];
+  const shellArgs = process.platform === 'win32' ? ['-NoLogo', '-NoProfile', '-Command', '-'] : ['-i'];
   try {
+    if (typeof id !== 'string' || !id || terminals.has(id)) return { ok: false, error: 'Invalid or active terminal id' };
+    if (cwd) { const target = confinement.resolveInside(cwd); if (!target.ok) return target; cwd = target.path; }
     const proc = spawn(shellBin, shellArgs, { cwd: cwd || undefined, env: process.env, windowsHide: true });
-    terminals.set(String(id), proc);
-    proc.stdout.on('data', (d) => send('term:data', { id, chunk: d.toString() }));
-    proc.stderr.on('data', (d) => send('term:data', { id, chunk: d.toString() }));
-    proc.on('close', (code) => { terminals.delete(String(id)); send('term:exit', { id, code }); });
-    return { ok: true, shell: shellBin };
+    proc.stdin.on('error', () => {});
+    return startStream(terminals, id, proc, 'term:data', 'term:exit').then((result) => ({ ...result, shell: shellBin }));
   } catch (err) {
     return { ok: false, error: err.message };
   }
@@ -152,13 +231,13 @@ ipcMain.handle('term:create', (e, { id, cwd }) => {
 ipcMain.handle('term:input', (e, { id, data }) => {
   guard(e);
   const proc = terminals.get(String(id));
-  if (proc) proc.stdin.write(String(data));
-  return { ok: Boolean(proc) };
+  if (!proc || proc.stdin.destroyed || !proc.stdin.writable) return { ok: false, error: 'Terminal is closed; retry to start a new shell' };
+  try { proc.stdin.write(String(data)); return { ok: true }; } catch (err) { return { ok: false, error: err.message }; }
 });
 ipcMain.handle('term:kill', (e, { id }) => {
   guard(e);
   const proc = terminals.get(String(id));
-  if (proc) { try { proc.kill(); } catch { /* gone */ } }
+  if (proc) stopChild(proc);
   return { ok: Boolean(proc) };
 });
 
@@ -183,13 +262,22 @@ ipcMain.handle('project:read', (e, { file }) => {
   const target = confinement.resolveInside(file);
   if (!target.ok) return target;
   try {
-    const text = fs.readFileSync(target.path, 'utf8');
-    return { ok: true, content: text.slice(0, READ_CAP), truncated: text.length > READ_CAP };
+    const fd = fs.openSync(target.path, 'r');
+    try {
+      const size = fs.fstatSync(fd).size;
+      const bytes = Buffer.alloc(Math.min(size, READ_CAP * 4 + 4));
+      const length = fs.readSync(fd, bytes, 0, bytes.length, 0);
+      const body = bytes.subarray(0, length);
+      if (body.includes(0)) return { ok: false, error: 'Binary and UTF-16 files cannot be edited in the UTF-8 editor.' };
+      const decoder = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true });
+      const text = decoder.decode(body, { stream: size > length });
+      return { ok: true, content: text.slice(0, READ_CAP), truncated: text.length > READ_CAP || size > length };
+    } finally { fs.closeSync(fd); }
   } catch (err) {
     return { ok: false, error: err.message };
   }
 });
-ipcMain.handle('project:write', (e, { file, content }) => {
+ipcMain.handle('project:write', (e, { file, content, expectedContent }) => {
   guard(e);
   const target = confinement.resolveInside(file);
   if (!target.ok) return target;
@@ -198,6 +286,10 @@ ipcMain.handle('project:write', (e, { file, content }) => {
     return { ok: false, error: `Refusing to write more than ${WRITE_CAP} bytes` };
   }
   try {
+    if (expectedContent !== undefined) {
+      const matches = typeof expectedContent === 'string' && (fs.existsSync(target.path) ? fs.statSync(target.path).size === Buffer.byteLength(expectedContent, 'utf8') && fs.readFileSync(target.path, 'utf8') === expectedContent : expectedContent === '');
+      if (!matches) return { ok: false, error: 'The file changed on disk. Reopen it before saving to avoid overwriting external changes.' };
+    }
     fs.writeFileSync(target.path, body);
     return { ok: true };
   } catch (err) {

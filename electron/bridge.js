@@ -11,9 +11,10 @@
 // Pure Node — no Electron imports — so it is fully unit-testable.
 const { spawn, spawnSync } = require('node:child_process');
 const { existsSync, readFileSync, readdirSync, statSync } = require('node:fs');
-const { join, delimiter, basename, dirname } = require('node:path');
+const { join, delimiter, basename, dirname, resolve } = require('node:path');
 const { homedir, totalmem, cpus } = require('node:os');
 const http = require('node:http');
+const telemetry = require('./telemetry');
 
 const IS_WIN = process.platform === 'win32';
 
@@ -24,12 +25,12 @@ function lehroHome() {
 // Locate the LehroSol CLI: pinned env var → PATH → known install folders.
 function findLehrosol() {
   const pinned = process.env.LEHROSOL_BIN;
-  if (pinned && existsSync(pinned)) return { cmd: pinned, viaNode: /\.m?js$/i.test(pinned) };
+  if (pinned && existsSync(pinned)) return resolveCliCommand(pinned);
   const probe = spawnSync(IS_WIN ? 'where' : 'which', ['lehrosol'], { encoding: 'utf8', windowsHide: true });
   if (probe.status === 0 && probe.stdout) {
     const lines = probe.stdout.split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
     const preferred = IS_WIN ? (lines.find((l) => /\.cmd$/i.test(l)) || lines[0]) : lines[0];
-    if (preferred) return { cmd: preferred, viaNode: false };
+    if (preferred) return resolveCliCommand(preferred);
   }
   const guesses = [
     'D:\\lehrosol-cli\\bin\\lehrosol.js',
@@ -37,6 +38,20 @@ function findLehrosol() {
   ];
   for (const g of guesses) if (existsSync(g)) return { cmd: g, viaNode: true };
   return null;
+}
+
+function resolveCliCommand(cmd) {
+  if (IS_WIN && /\.(cmd|bat)$/i.test(cmd)) {
+    try {
+      const shim = readFileSync(cmd, 'utf8');
+      const entry = shim.match(/"%dp0%[\\/]((?:node_modules[\\/])?(?:@lehrosolutions[\\/]cli|lehrosol-cli)[\\/]bin[\\/]lehrosol\.m?js)"\s+%\*/i);
+      if (entry) {
+        const file = resolve(dirname(cmd), entry[1].replace(/[\\/]/g, require('node:path').sep));
+        if (statSync(file).isFile()) return { cmd: file, viaNode: true };
+      }
+    } catch { /* Custom shell wrappers are handled below. */ }
+  }
+  return { cmd, viaNode: /\.m?js$/i.test(cmd) };
 }
 
 function cliEnv() {
@@ -72,8 +87,11 @@ function spawnCli(args, opts = {}) {
     throw err;
   }
   const cwd = opts.cwd || undefined;
-  if (found.viaNode) return spawn(process.execPath, [found.cmd, ...args], { env: cliEnv(), windowsHide: true, cwd });
+  if (found.viaNode) return spawn(cliNodeExecutable(), [found.cmd, ...args], { env: cliEnv(), windowsHide: true, cwd });
   if (IS_WIN && /\.(cmd|bat)$/i.test(found.cmd)) {
+    if ([found.cmd, ...args].some((part) => /["%!\r\n]/.test(String(part)))) {
+      throw new Error('This custom Windows CLI wrapper cannot safely pass quotes, environment expansions, or multiline arguments. Locate bin/lehrosol.js in Settings instead.');
+    }
     return spawn('cmd.exe', ['/d', '/s', '/c', buildWindowsCmdLine(found.cmd, args)], {
       env: cliEnv(),
       windowsHide: true,
@@ -82,6 +100,10 @@ function spawnCli(args, opts = {}) {
     });
   }
   return spawn(found.cmd, args, { env: cliEnv(), windowsHide: true, cwd });
+}
+
+function cliNodeExecutable() {
+  return process.versions.electron ? 'node' : process.execPath;
 }
 
 // Tolerant JSON extraction: some commands print human lines around the JSON.
@@ -105,23 +127,72 @@ function runJson(args, timeoutMs = 600000) {
     try { child = spawnCli(args); } catch (err) { resolve({ ok: false, error: err.message, code: err.code }); return; }
     let out = '';
     let errOut = '';
-    const timer = setTimeout(() => { try { child.kill(); } catch { /* already gone */ } }, timeoutMs);
-    child.stdout.on('data', (d) => { out += d; });
-    child.stderr.on('data', (d) => { errOut += d; });
-    child.on('error', (err) => { clearTimeout(timer); resolve({ ok: false, error: err.message }); });
-    child.on('close', (code) => {
+    let bytes = 0;
+    let failure = null;
+    let settled = false;
+    let fallback = null;
+    child.stdout.setEncoding('utf8');
+    child.stderr.setEncoding('utf8');
+    const finish = (result) => {
+      if (settled) return;
+      settled = true;
       clearTimeout(timer);
+      clearTimeout(fallback);
+      resolve(result);
+    };
+    const stop = (error, code) => {
+      if (failure) return;
+      failure = { error, code };
+      terminateChild(child);
+      fallback = setTimeout(() => {
+        child.stdout.destroy();
+        child.stderr.destroy();
+        finish({ ok: false, ...failure, raw: `${out}\n${errOut}`.trim().slice(-4000) });
+      }, 5000);
+    };
+    const duration = Number.isFinite(Number(timeoutMs)) && Number(timeoutMs) > 0 ? Number(timeoutMs) : 600000;
+    const timer = setTimeout(() => stop(`CLI command timed out after ${duration} ms`, 'ETIMEDOUT'), duration);
+    const capture = (data, stderr) => {
+      if (failure || settled) return;
+      bytes += Buffer.byteLength(data, 'utf8');
+      if (bytes > 8 * 1024 * 1024) { stop('CLI command exceeded the 8 MiB output limit', 'EOUTPUTLIMIT'); return; }
+      if (stderr) errOut += data.toString();
+      else out += data.toString();
+    };
+    child.stdout.on('data', (d) => capture(d, false));
+    child.stderr.on('data', (d) => capture(d, true));
+    child.on('error', (err) => finish({ ok: false, error: err.message, code: err.code }));
+    child.on('close', (code) => {
       const parsed = parseJsonLoose(out);
-      if (parsed && typeof parsed === 'object') { resolve({ ok: parsed.ok !== false, exitCode: code, data: parsed }); return; }
-      resolve({ ok: code === 0, exitCode: code, raw: `${out}\n${errOut}`.trim().slice(-4000) });
+      const raw = `${out}\n${errOut}`.trim().slice(-4000);
+      if (failure) { finish({ ok: false, exitCode: code, ...failure, ...(parsed ? { data: parsed } : {}), raw }); return; }
+      if (parsed && typeof parsed === 'object') {
+        const ok = code === 0 && parsed.ok !== false;
+        finish({ ok, exitCode: code, data: parsed, ...(!ok ? { error: parsed.error || parsed.reason || errOut.trim().slice(-4000) || (code === 0 ? 'CLI reported a diagnostic or operation failure; inspect the returned details' : `CLI command exited with code ${code}`) } : {}) });
+        return;
+      }
+      finish({ ok: code === 0, exitCode: code, raw, ...(code !== 0 ? { error: errOut.trim().slice(-4000) || `CLI command exited with code ${code}` } : {}) });
     });
   });
 }
 
+function terminateChild(child) {
+  if (IS_WIN && Number.isInteger(child.pid)) {
+    try {
+      const killer = spawn('taskkill.exe', ['/pid', String(child.pid), '/t', '/f'], { windowsHide: true, stdio: 'ignore' });
+      const timer = setTimeout(() => { killer.kill(); try { child.kill(); } catch { /* exited */ } }, 3000);
+      killer.once('error', () => { clearTimeout(timer); try { child.kill(); } catch { /* exited */ } });
+      killer.once('close', (code) => { clearTimeout(timer); if (code !== 0) { try { child.kill(); } catch { /* exited */ } } });
+      return;
+    } catch { /* Fall through to direct termination. */ }
+  }
+  try { child.kill('SIGKILL'); } catch { /* exited */ }
+}
+
 // The CLI's full world-state in one call (health, vault, engrams, web plane…).
-function snapshot() { return runJson(['tui', '--json'], 30000); }
+function snapshot() { return runJson(['tui', '--json'], 90000); }
 function vault() { return runJson(['vault', '--json'], 60000); }
-function addVaultRoot(dir) { return runJson(['vault', 'add-root', String(dir), '--json'], 30000); }
+function addVaultRoot(dir) { return runJson(['vault', 'add-root', '--path', String(dir), '--json'], 30000); }
 
 function readJsonFile(path) {
   try { return JSON.parse(readFileSync(path, 'utf8')); } catch { return null; }
@@ -149,11 +220,16 @@ function pingServer(port, apiKey) {
       timeout: 2500,
     }, (res) => {
       let body = '';
-      res.on('data', (d) => { body += d; });
+      let bytes = 0;
+      res.setEncoding('utf8');
+      res.on('data', (d) => { bytes += Buffer.byteLength(d, 'utf8'); if (bytes > 512 * 1024) req.destroy(new Error('Engine model list exceeded the 512 KiB limit')); else body += d; });
+      res.on('error', (err) => resolve({ ok: false, error: err.message, ms: Date.now() - started }));
       res.on('end', () => {
         const parsed = parseJsonLoose(body);
-        const models = parsed && Array.isArray(parsed.data) ? parsed.data.map((m) => m.id) : [];
-        resolve({ ok: res.statusCode === 200, status: res.statusCode, ms: Date.now() - started, models });
+        const valid = parsed && Array.isArray(parsed.data);
+        const modelDetails = valid ? parsed.data.filter((m) => m && typeof m.id === 'string' && m.id) : [];
+        const models = modelDetails.map((m) => m.id);
+        resolve({ ok: res.statusCode === 200 && Boolean(valid), status: res.statusCode, ms: Date.now() - started, models, modelDetails, ...(!valid ? { error: 'Engine returned an invalid model list' } : {}) });
       });
     });
     req.on('timeout', () => { req.destroy(); resolve({ ok: false, error: 'timeout', ms: Date.now() - started }); });
@@ -263,7 +339,7 @@ function nativeScan(extraDirs = []) {
 /* ---------------- direct chat (model test bench) ---------------- */
 // One prompt → one completion against the running engine, with timing and
 // tokens/sec — the GUI Test Bench uses this to benchmark models head-to-head.
-function chatOnce({ port, apiKey, prompt, system, maxTokens = 512, timeoutMs = 300000, temperature }) {
+function chatOnce({ port, apiKey, prompt, system, model, source, maxTokens = 512, timeoutMs = 300000, temperature }) {
   return new Promise((resolve) => {
     const started = Date.now();
     const messages = [];
@@ -283,15 +359,24 @@ function chatOnce({ port, apiKey, prompt, system, maxTokens = 512, timeoutMs = 3
       timeout: Number(timeoutMs),
     }, (res) => {
       let raw = '';
-      res.on('data', (d) => { raw += d; });
+      let bytes = 0;
+      res.setEncoding('utf8');
+      res.on('data', (d) => { bytes += Buffer.byteLength(d, 'utf8'); if (bytes > 8 * 1024 * 1024) req.destroy(new Error('Engine completion exceeded the 8 MiB limit')); else raw += d; });
+      res.on('error', (err) => resolve({ ok: false, error: err.message, ms: Date.now() - started }));
       res.on('end', () => {
         const ms = Date.now() - started;
         const parsed = parseJsonLoose(raw);
         if (!parsed || res.statusCode !== 200) { resolve({ ok: false, status: res.statusCode, ms, error: (parsed && parsed.error && parsed.error.message) || raw.slice(0, 300) }); return; }
-        const text = parsed.choices && parsed.choices[0] && parsed.choices[0].message ? parsed.choices[0].message.content : '';
+        const choice = parsed.choices && parsed.choices[0];
+        const text = choice && choice.message ? choice.message.content : '';
+        if (typeof text !== 'string') { resolve({ ok: false, ms, error: 'Engine returned non-text completion content' }); return; }
+        const finishReason = choice && typeof choice.finish_reason === 'string' ? choice.finish_reason : null;
         const tokens = parsed.usage ? parsed.usage.completion_tokens : null;
         const promptTokens = parsed.usage ? parsed.usage.prompt_tokens : null;
-        resolve({ ok: true, text, ms, tokens, promptTokens, tokPerSec: tokens ? Math.round((tokens / (ms / 1000)) * 10) / 10 : null });
+        const tracked = serveState().serve;
+        const modelName = model || (tracked && Number(tracked.port) === Number(port) && tracked.model) || parsed.model || 'local';
+        const usageRecord = telemetry.record(lehroHome(), modelName, parsed.usage, ms, source || 'desktop-chat');
+        resolve({ ok: true, text, finishReason, ms, tokens, promptTokens, usage: parsed.usage || null, usageRecord, tokPerSec: tokens && ms ? Math.round((tokens / (ms / 1000)) * 10) / 10 : null });
       });
     });
     req.on('timeout', () => { req.destroy(); resolve({ ok: false, error: 'timeout', ms: Date.now() - started }); });
@@ -328,7 +413,28 @@ function listTree(dir, depth = 4, budget = { n: 600 }) {
 
 function info() {
   const found = findLehrosol();
-  return { platform: process.platform, cli: found ? found.cmd : null, cliVersion: cliVersion(), home: lehroHome(), totalGB: Math.round(totalmem() / 1e8) / 10 };
+  const codeEvents = Boolean(found && found.viaNode && existsSync(join(dirname(found.cmd), '..', 'src', 'core', 'usage.js')));
+  return { platform: process.platform, cli: found ? found.cmd : null, cliVersion: cliVersion(found), codeEvents, home: lehroHome(), totalGB: Math.round(totalmem() / 1e8) / 10 };
+}
+
+function usage(days) { return telemetry.read(lehroHome(), days); }
+
+function engineDetails({ port, apiKey } = {}) {
+  return new Promise((resolve) => {
+    const req = http.get({ host: '127.0.0.1', port: Number(port), path: '/props', headers: apiKey ? { authorization: `Bearer ${apiKey}` } : {}, timeout: 2500 }, (res) => {
+      let raw = ''; let bytes = 0;
+      res.on('data', (chunk) => { bytes += chunk.length; if (bytes > 512 * 1024) { req.destroy(); resolve({ ok: false, error: 'Engine metadata exceeded limit' }); } else raw += chunk.toString(); });
+      res.on('end', () => {
+        const data = parseJsonLoose(raw);
+        if (res.statusCode !== 200 || !data) { resolve({ ok: false, error: 'Engine does not expose properties' }); return; }
+        const n = Number(data.default_generation_settings?.n_ctx || data.n_ctx);
+        resolve({ ok: true, contextWindow: Number.isSafeInteger(n) && n > 0 ? n : null, slots: Number(data.total_slots) || null });
+      });
+      res.on('error', () => resolve({ ok: false, error: 'Engine metadata connection closed' }));
+    });
+    req.on('timeout', () => { req.destroy(); resolve({ ok: false, error: 'Engine metadata timed out' }); });
+    req.on('error', () => resolve({ ok: false, error: 'Engine metadata unavailable' }));
+  });
 }
 
 /* ---------------- CLI v3.2 quick-lane integration ----------------
@@ -338,26 +444,27 @@ function info() {
  * `modes`. Every call is `--json` first and degrades to a raw string
  * result when the connected CLI predates the flag. */
 
-// Version handshake with the connected CLI (`--version`, cached for the
-// process). Lets the GUI warn when the CLI is older than the flags it
-// wants to send instead of failing opaquely mid-action.
 let cliVersionCache = null;
-let cliVersionDone = false;
-function cliVersion() {
-  if (cliVersionDone) return cliVersionCache;
-  cliVersionDone = true;
-  const found = findLehrosol();
-  if (!found) return null;
+function cliVersion(found = findLehrosol()) {
+  if (!found) { cliVersionCache = null; return null; }
+  let key = found.cmd;
+  try {
+    const st = statSync(found.cmd);
+    key = `${found.cmd}:${st.size}:${st.mtimeMs}`;
+  } catch { cliVersionCache = null; return null; }
+  if (cliVersionCache && cliVersionCache.key === key) return cliVersionCache.version;
+  cliVersionCache = null;
   const args = ['--version'];
   let res = null;
   try {
-    if (found.viaNode) res = spawnSync(process.execPath, [found.cmd, ...args], { encoding: 'utf8', windowsHide: true, env: cliEnv(), timeout: 15000 });
+    if (found.viaNode) res = spawnSync(cliNodeExecutable(), [found.cmd, ...args], { encoding: 'utf8', windowsHide: true, env: cliEnv(), timeout: 15000 });
     else if (IS_WIN && /\.(cmd|bat)$/i.test(found.cmd)) res = spawnSync('cmd.exe', ['/d', '/s', '/c', buildWindowsCmdLine(found.cmd, args)], { encoding: 'utf8', windowsHide: true, env: cliEnv(), timeout: 15000 });
     else res = spawnSync(found.cmd, args, { encoding: 'utf8', windowsHide: true, env: cliEnv(), timeout: 15000 });
   } catch { return null; }
-  const m = res && res.stdout ? String(res.stdout).match(/(\d+\.\d+\.\d+[^\s"]*)/) : null;
-  cliVersionCache = m ? m[1] : null;
-  return cliVersionCache;
+  const m = res && res.status === 0 && res.stdout ? String(res.stdout).match(/(\d+\.\d+\.\d+[^\s"]*)/) : null;
+  if (!m) return null;
+  cliVersionCache = { key, version: m[1] };
+  return m[1];
 }
 
 // Distilled long-term memory (the CLI command is `engrams` since v3.0 —
@@ -486,4 +593,6 @@ module.exports = {
   arenaRun,
   suggestionPlan,
   cpuLoad,
+  usage,
+  engineDetails,
 };

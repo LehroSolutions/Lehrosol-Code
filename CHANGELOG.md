@@ -7,6 +7,89 @@ installer was publicly distributed for every version.
 
 ## [Unreleased]
 
+## [2.4.2] — 2026-11-13 (release candidate)
+
+### Added
+- Full-size mission output with answer/activity/raw views, filtering, changed-file
+  navigation, and a split editor layout.
+- Saved workspace layouts, pinned views, theme/accent/font controls, and a footer
+  for engine status, measured local usage, and context capacity.
+- Local usage records without prompts or answers. Expanded CLI event and usage
+  instrumentation requires the paired unreleased CLI changes; the published
+  CLI continues to provide readable mission logs.
+- On-demand Update controls in the top bar, Settings, About, and command palette.
+- Show new-release changes before download and installed-version changes even
+  when offline or no stable release is published.
+- Detect registered Windows installation versions and locations; reuse the
+  stable installer identity to replace old app files while retaining settings.
+- Link the matching checksums directly from the update dialog.
+- Display the latest published stable version and release changes, with explicit
+  no-release, offline, rate-limit, and missing-installer states.
+- Offer only official, versioned Windows installer links from validated release
+  metadata with the required checksum asset; installation remains manual.
+- Bundle the offline glossary, user guide, changelog, and license notices.
+- Add source checks, renderer workflow regression coverage, Electron smoke
+  tooling, and candidate preparation with checksums and release metadata.
+
+### Fixed
+- Accept canonical Windows short-path aliases of the application's own document
+  after historical upgrades, while rejecting other pages and untrusted frames.
+- Reject malformed, interrupted, and oversized engine responses without crashing
+  desktop IPC; recover corrupted saved layouts and retain model selections while
+  engine metrics refresh.
+- Preserve Unicode across subprocess and engine response chunks; clean temporary
+  test directories and use sparse synthetic model files on Windows.
+- Bind packaged smoke approval to both executable and archive hashes, and reject
+  invalid installer signatures during release preparation.
+- Read the displayed application version from the installed package.
+- Keep files with identical basenames in separate tabs and preserve edit drafts
+  across tab switches, with dirty-close and project/window guards.
+- Make truncated file previews read-only and refuse partial-context full-file
+  AI replacements.
+- Bind suggestions to their source path and content; reject stale proposals and
+  disk changes, and retain drafts/proposals after failed saves or Apply.
+- Recover from malformed saved prompt history and invalid engine settings.
+- Recover terminal readiness after creation failure or exit, handle asynchronous
+  subprocess errors, and keep old process exits from removing replacements.
+- Treat nonzero CLI exits and timed-out commands as failures even when their
+  output contains a success-shaped JSON object.
+- Bound UTF-8 file previews, reject binary editing, and open packaged Help from
+  a real file outside the application archive.
+- Keep engine health responsive during slow CLI snapshots, prevent overlapping
+  refresh processes, and start polling after a previously missing CLI is located.
+- Keep release controls and terminal tabs reachable at the minimum window size.
+- Run JavaScript CLI commands with the installed Node executable, avoiding a
+  new packaged-desktop process for every command and version handshake.
+- Register model folders with the CLI's required `vault add-root --path` contract.
+- Keep dismissed update checks from reopening dialogs after a late failure.
+- Match offline help to configured engine authentication and retain usable
+  security links after Help is extracted from the packaged application.
+- Include the actual installer signature status in release notes and metadata.
+- Skip invalid null usage-log records without losing later measured requests.
+
+### Changed
+- Update the packaged Electron runtime to 45.3.0 and electron-builder to 26.18.0.
+- Refresh the lockfile and pin patched release-tool dependencies for the
+  advisories found during release verification.
+- Enable Chromium renderer sandboxing alongside context isolation, and validate
+  the calling frame and navigation boundaries for desktop IPC.
+- Start new profiles with Live writes off; retain existing stored preferences.
+- Refresh setup, workflow, privacy, security, and release acceptance guidance.
+- Check updates only when requested; no startup check, silent installation,
+  remote analytics, or automatic restart is added.
+- Include the pending GitHub Actions dependency updates in candidate workflows.
+
+### Supported platform
+- Maintain and test the desktop on Windows 11 x64. Windows 10 is outside the
+  release's supported platform scope.
+
+### Validation boundary
+- Source tests and synthetic-engine smoke checks establish their covered
+  contracts, not local model quality or real GGUF engine startup acceptance.
+- Record final test/smoke/artifact evidence with the candidate. Windows 11
+  installation, upgrade behavior, real-model pairing, and signing must be
+  evaluated before a draft is promoted. A local build is not publication.
+
 ## [2.4.1] — 2026-10-28 (release candidate)
 
 ### Changed
@@ -130,6 +213,7 @@ abandoned multi-agent portal direction.
 ---
 
 
-[Unreleased]: https://github.com/LehroSolutions/Lehrosol-Code/compare/v2.4.1...HEAD
+[Unreleased]: https://github.com/LehroSolutions/Lehrosol-Code/compare/v2.4.2...HEAD
+[2.4.2]: https://github.com/LehroSolutions/Lehrosol-Code/compare/v2.4.1...v2.4.2
 [2.4.1]: https://github.com/LehroSolutions/Lehrosol-Code/compare/v2.4.0...v2.4.1
 [2.4.0]: https://github.com/LehroSolutions/Lehrosol-Code/tree/v2.4.0

@@ -22,11 +22,10 @@ Closes #
 
 - [ ] I ran `pnpm test` locally and pasted the real output below.
 - [ ] I added or updated tests for the behaviour I changed.
-- [ ] My change touches `electron/main.js`, `electron/preload.js`, or
-      `renderer/app.js` — paths with **no existing automated coverage** — and I
-      added coverage for it. *(See the coverage gap in CONTRIBUTING.md: the suite
-      covers `electron/bridge.js` and path confinement, with gaps in full Electron and renderer integration. If this box does not apply,
-      say so.)*
+- [ ] If I changed `electron/main.js`, `electron/preload.js`, or
+      `renderer/app.js`, I checked the affected main-process tests and Electron
+      smoke workflows and added coverage where needed. CI exercises source and
+      packaged workflows; note behavior those fixtures do not cover.
 - [ ] I did not weaken, skip, or delete a test to make things pass.
 
 **`pnpm test` output:**

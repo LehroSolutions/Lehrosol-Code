@@ -1,161 +1,176 @@
 # Lehrosol Code
 
-**The agentic engineering IDE for local models.** Lehrosol Code is an Electron desktop app deeply integrated with the LehroSol CLI — the GUI drives the CLI, the CLI feeds the GUI, and they share one model vault, one engine, and one state home (`~/.lehro`). Zero-setup model discovery, one-click engines, HELIX agent missions, a model test bench, ENGRAM memory, and a live system graph — all running on GGUFs from your own drive. No cloud, no demo content: everything on screen is real.
+Lehrosol Code is a Windows desktop IDE for local models, built around the
+[LehroSol CLI](https://github.com/LehroSolutions/lehrosol-cli). Discover GGUF
+models, start an engine, edit a project, run coding missions, review AI
+suggestions, and compare model output from one application. The desktop and CLI
+share the model vault and state home, normally `%USERPROFILE%\.lehro`.
 
-**Windows-first.** This app is built, tested, and packaged for Windows. It is developed and supported on Windows; other platforms are not currently a target (see [Requirements](#requirements)).
+Version **2.4.2 is a release candidate**. Tagged builds create a draft Windows
+installer release for review. Installers are unsigned unless signing credentials
+were supplied for that build. See [the release guide](RELEASING.md) for promotion
+checks and the distinction between automated checks and installation acceptance.
 
-[CI](https://github.com/LehroSolutions/Lehrosol-Code/actions/workflows/ci.yml) · [Releases](https://github.com/LehroSolutions/Lehrosol-Code/releases) · [Release guide](RELEASING.md)
+[Releases](https://github.com/LehroSolutions/Lehrosol-Code/releases) ·
+[CI](https://github.com/LehroSolutions/Lehrosol-Code/actions/workflows/ci.yml) ·
+[User guide](docs/USER-GUIDE.md) · [Offline glossary](docs/glossary.html) ·
+[Changelog](CHANGELOG.md)
 
-Version **2.4.1** is a release candidate. Tagged builds produce a draft Windows installer release with SHA256SUMS for maintainer review. Installers are currently unsigned; installation and CLI-pairing checks remain part of promotion to a published release.
+## Install and connect
 
-> **📖 Documentation:** [**docs/glossary.html**](docs/glossary.html) — the full glossary, install walkthrough, CLI pairing, and a **Troubleshooting** section for common errors. Start there if anything below is unclear.
+Windows 11 x64 is the supported desktop target. Windows 10 is outside the
+maintained and tested support scope. Install the desktop installer
+from a **published** GitHub Release. A draft is a maintainer candidate and is not
+offered by the application's update check. Windows may display a SmartScreen
+warning for an unsigned installer; verify its source and the release's
+`SHA256SUMS` before running it.
 
-| | |
-|---|---|
-| 📖 Documentation | [docs/glossary.html](docs/glossary.html) · `.env.example` (optional overrides) |
-| 📡 Telemetry | **None.** No analytics, no crash reporting, no phone-home. See [Privacy](#privacy). |
-| 🐛 Support | [Open an issue](https://github.com/LehroSolutions/Lehrosol-Code/issues) · see [Maintainers](#maintainers) |
-| 🤝 Contributing | [CONTRIBUTING.md](CONTRIBUTING.md) |
-| 🔐 Security | [SECURITY.md](SECURITY.md) — please report vulnerabilities privately |
-| 📜 Changelog | [CHANGELOG.md](CHANGELOG.md) |
-| ⚖️ License | [Apache-2.0](LICENSE) · [NOTICE](NOTICE) · [AUTHORS](AUTHORS) |
+Install the paired CLI using Node.js and npm:
 
-## Requirements
-
-| | |
-|---|---|
-| **OS** | **Windows 10/11 (x64)** — Windows is the only supported target; builds are Windows-only |
-| **Node.js** | **22.13.0+** for source builds (`engines.node >=22.13.0`) |
-| **Package manager** | **pnpm 11** (pinned via `packageManager` → `pnpm@11.15.1`) |
-| **LehroSol CLI** | **3.0+ required for the full experience** — see [The CLI relationship](#the-cli-relationship) |
-| **Native build tools** | Not required — there are **no native modules** |
-
-Microsoft Visual C++ Build Tools are **not** needed.
-
-## How the deep integration works
-
-| Layer | Mechanism |
-|---|---|
-| Actions | The app shells out to `lehrosol … --json` (vault, serve, loop, engrams, gui) |
-| Awareness | It reads the CLI's own state files: `~/.lehro/serve.json`, `config.json` |
-| Engine | It talks HTTP to your llama-server: `/v1/models` pings, `/v1/chat/completions` benchmarks |
-| Discovery | A native scanner finds GGUFs on your drives with no config, then registers those folders into the CLI vault (`vault add-root`) so both tools share one library |
-| Sync (v2.4) | The bridge handshakes the CLI version (`--version`) and speaks the CLI v3.2 quick lane: `up` (one-click best-fit engine), `arena` (tok/s racing), `scan` (CLI-native discovery that registers roots), `engrams` (distilled memory — renamed from `engram` in v3.0), `recommend`, `doctor`, `adapters`, `modes` |
-
-## The CLI relationship
-
-**LehroSol is one product with three front-ends; this is the desktop one.** The engine is the [LehroSol CLI](https://github.com/LehroSolutions/lehrosol-cli), in a sibling repository and also Apache-2.0. There is a third front-end too: a web dashboard at `lehrosol gui`, which ships inside the CLI repo and talks to the same MCP control plane.
-
-Install the CLI first — this app drives it for every action.
-
-Install the current CLI beta with `npm install -g @lehrosolutions/cli@beta`.
-The command names remain `lehrosol` and `lehr-sol`.
-
-The bridge resolves the CLI in this order:
-
-1. **`LEHROSOL_BIN`** — an absolute path to the CLI entry script, if set and it exists
-2. **`PATH`** — a `lehrosol` shim (`where lehrosol` on Windows)
-3. **Fallback folders** — a couple of well-known install locations
-
-If none resolve, the app still launches and shows the Vault, but engine and mission features need the CLI. You can also point at it in-app: **Settings → Locate…**, which persists your choice.
-
-### Version pairing
-
-The app reads the CLI's `--version` at startup and shows the connected version in **Settings** and the About dialog.
-
-| Lehrosol Code | LehroSol CLI | Notes |
-|---|---|---|
-| 2.4.x | **3.2+** | Recommended. Full v3.2 quick lane: `up`, `arena`, `scan`, `engrams`, `recommend`, `doctor`, `adapters`, `modes` |
-| 2.4.x | **3.0–3.1** | Works. `engrams` requires 3.0+ (renamed from `engram` in 3.0) |
-| 2.4.x | **< 3.0** | Degraded. Older CLIs lack the renamed quick-lane commands, so some panels stay dark |
-
-The app does **not hard-fail** on an older CLI — quick-lane calls degrade gracefully instead of erroring mid-action. You will simply notice missing panels rather than a crash.
-
-## Zero-setup models
-
-On first launch the app checks the CLI vault; if it is empty (or the CLI is missing) it scans your PC automatically — `D:\AI Models`-style folders on every drive, Jan, LM Studio, HuggingFace cache, `~/models`, etc. — rates each model against your actual RAM (GREAT / TIGHT / NO FIT), and lists them in the Vault view. One click adds the discovered folders to the CLI vault; one click serves a model. With **Auto-start engine** on (default), the app resumes your last served model at launch, so your local AI is simply *on*.
-
-To scan somewhere the built-in candidates don't cover, set `LEHRO_MODELS_DIR` (see [`.env.example`](.env.example)) or use **Vault → Scan another folder…**.
-
-## Model Test Bench (⚖)
-
-Pick a model, pick a preset (code / reasoning / summarize / creative / custom), hit **Run**: the app serves the model if needed, sends the prompt, and records latency, tokens, and tokens/sec alongside the full output. **Run on all GREAT models** does a head-to-head comparison and keeps a leaderboard, so you can feel out every model on your drive in minutes.
-
-## Run it (Windows)
+The JavaScript CLI runs through `node` on PATH in the desktop. Keep Node.js
+installed and restart the desktop after installing it or changing PATH.
 
 ```powershell
-# Requires Node.js 22.13.0+
-corepack enable pnpm                # one-time; honors the pinned pnpm 11.15.1
-# Alternative if Corepack is unavailable: npm i -g pnpm@latest-11
-pnpm install                        # downloads Electron (one-time, needs internet)
+npm install -g @lehrosolutions/cli@beta
+lehrosol --version
+lehrosol doctor
+```
+
+The command aliases remain `lehrosol` and `lehr-sol`. CLI 3.2 is recommended for
+the full quick-lane interface. Older versions may lack commands or flags; update
+the CLI when a panel reports a compatibility error.
+
+The desktop looks for `LEHROSOL_BIN`, then `lehrosol` on `PATH`, then known
+installation folders. If discovery fails, open **Settings → Locate…** and select
+the CLI's `bin/lehrosol.js`. The desktop can open without the CLI, but engine and
+mission features require it. A local GGUF model and llama.cpp-compatible server
+are also needed for inference; no model weights are bundled.
+
+## First project
+
+1. Open **Vault** and scan for your models. Add discovered folders to the shared
+   CLI vault, or scan another folder.
+2. Start a model from the Vault or engine controls. The fit rating helps choose
+   a model; actual context, background load, and available memory still matter.
+3. Click the project selector to open your working folder, then use **Files** to
+   open a file. Edit and save with **Ctrl+S**.
+4. Type a goal in the ask bar to run a coding mission in that folder. Inspect the
+   mission's streamed output and changed files.
+
+**New profiles start with Live writes off** for a preview using `--dryRun`.
+Enable it to let a mission write project files. **Allow run** is also off by
+default; enabling it permits the coding agent to run project commands. Both
+choices persist, including a previous profile's Live writes preference. Use
+version control or a backup for projects on which you allow writes.
+
+**Auto-start engine is enabled by default** and can resume a model or choose a
+fit on launch. Disable it in Settings if you want to control resource use.
+
+## Updates and release changes
+
+Click **Update** in the top bar, **Check for updates** in Settings or About, or
+the matching command-palette action. The app checks the repository's latest
+published stable release and shows its version and release notes. Notes are
+displayed as text. Drafts and prereleases are excluded.
+
+New-release changes are shown before download. The dialog also shows the
+changes bundled with your installed version when it differs from the public
+release, or when no stable release is available or the check is offline.
+
+An available update opens its official GitHub download in your browser; the app
+does not install or restart itself. The release must provide the expected
+versioned Windows installer and `SHA256SUMS` before it is offered as an installer
+update. Download the checksum file, verify the installer, save your work, close
+the app, and run the new installer. The dialog includes **Download checksums**.
+
+On Windows the update check detects registered per-user and all-user
+installations and displays their version and location. The installer recognizes
+the existing application using its stable identity, removes the old application
+files, and installs the new version in the selected scope. The wizard reuses
+the detected location and preserves desktop settings, projects, GGUFs, and
+shared CLI state. Source and portable copies are managed separately and are
+not removed by the installer.
+
+No update request runs at startup. A missing public release, an offline request,
+or GitHub rate limiting produces a recoverable status; retry when connected.
+Updating Code does not update the CLI. Use the npm command above separately.
+
+## Controls and workflows
+
+| Control | What it does |
+| --- | --- |
+| Engine / Vault / + New Agent | Discover models; start or stop a local model server using CLI `up` or `vault serve`. |
+| Ask bar / Missions / Agent Stream | Run the CLI's hands-on `code` lane in the selected project, stream output, retry, or cancel. |
+| Files / Editor | Browse and edit selected-project files. Tabs distinguish identical basenames, dirty changes are protected, and truncated reads are read-only. |
+| AI Suggestion / Apply | Request a rewrite, review the proposed change, and write it only if its original file and content still match. Partial-context replacements are refused. |
+| Search | Search text in the project files included by the bounded tree scan. |
+| Test Bench | Send a preset or custom prompt to a model; inspect its output, latency, tokens, and tokens/sec. Compare models and review the CPU-load warning. |
+| System Graph | Inspect engine, vault, adapter, mission, memory, and web-plane status. Polling can be paused. |
+| Terminal / Output / Events | Run a real user shell, inspect mission output, or inspect application events. |
+| Workspace / Views | Switch Create, Code, Debug, or Minimal layouts; pin views, save layouts, and split editor/output. |
+| Model usage / Footer | Inspect measured local token counts and available engine/GGUF context metadata. Missing counts stay unknown. |
+| Skills / Memory | Browse playbooks and recent CLI ENGRAM records. |
+| Settings | Choose the CLI, engine port/key, theme, resource profile, and auto-start behavior. |
+| About / Help / Update | Read the application version, open bundled documentation, or check public release changes. |
+| Ctrl+K | Open the command palette. |
+
+The [user guide](docs/USER-GUIDE.md) explains error recovery, editor protections,
+suggestions, benchmarks, and the update procedure.
+
+## Build from source
+
+Source builds need **Node.js 22.13.0+** and the pinned **pnpm 11.15.1**. No native
+modules or Microsoft Visual C++ Build Tools are required.
+
+```powershell
+corepack enable pnpm
+# If Corepack is unavailable: npm install -g pnpm@11.15.1
+pnpm install --frozen-lockfile
+pnpm check
+pnpm test
 pnpm start
 ```
 
-- Tests: `node --test "test-app/*.test.js"` (or `pnpm test`) · Installer: `pnpm dist`
-- This repo is **pnpm 11-managed** (`packageManager` pins `pnpm@11.15.1`). Use `pnpm install --frozen-lockfile` with the committed lockfile. `pnpm-workspace.yaml` sets `nodeLinker: hoisted` for electron-builder.
-- Electron's binary-download script is approved through `allowBuilds` in `pnpm-workspace.yaml`.
-- `pnpm start` launches Electron through `scripts/start.js`, which strips pnpm-injected `NODE_OPTIONS` (e.g. `--use-system-ca`) that Electron rejects with exit code 9.
-- CLI not on PATH? Settings → **Locate…** → pick your `bin/lehrosol.js` (persisted), or set `$env:LEHROSOL_BIN`.
-- Configuration is entirely optional — see [`.env.example`](.env.example).
+`pnpm-workspace.yaml` supplies `nodeLinker: hoisted` for electron-builder and
+`allowBuilds` for Electron's binary download. `scripts/start.js` removes injected
+`NODE_OPTIONS` flags that Electron rejects. Environment overrides must be set in
+the launching process; the app does not automatically load `.env` files. See
+[`.env.example`](.env.example) for `LEHROSOL_BIN`, `LEHRO_HOME`, and model roots.
 
-## Installers are unsigned
+Packaging and smoke checks are described in [RELEASING.md](RELEASING.md).
 
-Release builds are produced with `pnpm dist` and are **not code-signed**. Expect:
+## Privacy and trust
 
-- **Windows SmartScreen** to show "Windows protected your PC" on first launch → *More info* → *Run anyway*.
-- No automatic updates — download a new installer manually.
+No remote analytics or automatic crash reporting is configured. A local usage
+ledger records model identifiers, request timing, and provider token counts in
+Lehro home; it excludes prompts and answers. New CLI instrumentation remains
+unreleased; the published beta supports desktop request counts and readable
+mission logs. Inference
+goes to the local engine; the CLI and any adapters you enable can make their own
+network requests. Clicking Update contacts GitHub for public release metadata
+and opens downloads in your system browser. Local work does not require an
+update check.
 
-The app is otherwise fully local: it makes no network calls beyond whatever the CLI and your own model server do.
+Settings are persisted in the desktop's Electron profile; CLI state and keys
+also live in the configured Lehro home. Treat those files as sensitive. API keys
+are sent to the configured engine for authentication.
 
-## What every control does
+The renderer is isolated and sandboxed, and file IPC is confined to project
+folders selected in the native dialog. The integrated terminal and the trusted
+CLI run with your user permissions. These controls do not sandbox the commands
+you intentionally run. Review model suggestions and mission results before
+relying on them. See [SECURITY.md](SECURITY.md) for the threat model.
 
-| Control | Action |
-|---|---|
-| **Agent Stream** | Live mission cards — each ask-bar prompt is a real `loop run` with phase badges (architect → scout → builder → reviewer → scribe), streamed tail, and cancel |
-| **Engine card / pill** | Engine health + one-click Start (best-fit model) / Stop |
-| **+ New Agent** | Serve any GGUF → `lehrosol vault serve --model … --port … --apiKey …` |
-| **Ask bar (⌘ /)** | Runs a HELIX mission; **live writes** = `--dryRun=false` (dry run is default) |
-| **AI Suggestion** | Local model rewrites the open file; diff card; Apply writes to disk |
-| **Test Bench (⚖)** | Serve → prompt → latency/tok/s per model + leaderboard |
-| **Vault (▣)** | Vault models or native scan results; Rescan drives; Add folders to CLI vault; Serve/Test |
-| **System Graph** | Vault · llama-server · adapter · loop · ENGRAM · web plane — click nodes to act; 5s live polling |
-| **Terminal / Events / Output / Engine log** | Real shell; real event feed; streamed mission output |
-| **Files / Search / Skills / Memory / Settings** | Project editing, project search, mission playbooks, ENGRAM, ports/keys/auto-start/CLI path |
-| **⌘ K** | Command palette (Quick Start, Rescan Drives, Test Bench, …) |
+## Repository and support
 
-## Footprint
+`electron/` contains the main process, preload, CLI bridge, and release checker;
+`renderer/` contains the interface; `docs/` contains bundled help; `scripts/` and
+`test-app/` contain development and verification tools. The package includes
+application sources, help, and license notices as specified by `build.files`.
 
-The application declares no npm runtime dependencies beyond its packaged Electron runtime. Model discovery scans have time and entry budgets; graph polling runs every 5 seconds and can be paused from the graph header.
+Report bugs through [GitHub Issues](https://github.com/LehroSolutions/Lehrosol-Code/issues).
+Report vulnerabilities privately according to [SECURITY.md](SECURITY.md).
+Contribution guidance is in [CONTRIBUTING.md](CONTRIBUTING.md).
 
-## Privacy
-
-No telemetry, analytics, or automatic crash reporting is configured. The app talks to the CLI, the configured model server, and the filesystem. API keys are stored under `~/.lehro` and sent to the configured engine when needed for authentication. Choose and trust the engine endpoint accordingly.
-
-## Repo layout
-
-```
-electron/    main process, preload, CLI bridge (the real app)
-renderer/    UI — index.html, styles.css, app.js
-scripts/     start.js — strips pnpm-injected NODE_OPTIONS before launching Electron
-test-app/    node --test suite + QA harness for the bridge and cockpit
-docs/        glossary.html — documentation, install walkthrough, troubleshooting
-build/       icon.ico (packaging asset only)
-```
-
-Only `electron/`, `renderer/`, and `package.json` are shipped — see `build.files` in `package.json`. Everything else is source, tooling, or documentation.
-
-## Maintainers
-
-This project is maintained by **Lehro Solutions**.
-
-- 🐛 **Bugs and feature requests** → [GitHub Issues](https://github.com/LehroSolutions/Lehrosol-Code/issues)
-- 🔐 **Security vulnerabilities** → report privately per [SECURITY.md](SECURITY.md); please do **not** open a public issue
-- 💬 **Questions and discussion** → [GitHub Discussions](https://github.com/LehroSolutions/Lehrosol-Code/discussions)
-- 🧑‍💻 **Contributions** → see [CONTRIBUTING.md](CONTRIBUTING.md) and [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)
-- 👥 **Credits** → [AUTHORS](AUTHORS)
-
-## License
-
-**Apache-2.0** · © 2026 Lehro Solutions — see [LICENSE](LICENSE) and [NOTICE](NOTICE).
-
-This project relicensed from GPL-3.0-or-later; the change is recorded in [CHANGELOG.md](CHANGELOG.md).
+**Apache-2.0 · © 2026 Lehro Solutions.** See [LICENSE](LICENSE), [NOTICE](NOTICE),
+and [AUTHORS](AUTHORS).

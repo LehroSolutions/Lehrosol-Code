@@ -1,8 +1,10 @@
 # Security Policy
 
 Lehrosol Code is a local-first Electron desktop application. It runs entirely on
-your machine, talks to your machine's filesystem and drives a real shell, and is
-designed to work fully offline with zero cloud services.
+your machine, talks to your machine's filesystem, drives a real shell, and
+supports offline editing and local inference once prerequisites are installed.
+The on-demand update check contacts GitHub's public release API. The CLI and
+adapters you enable may have their own network behavior.
 
 That design has consequences, and they are the point of this document. **Read
 the [Threat model](#threat-model) before reporting anything.** A large share of
@@ -146,14 +148,18 @@ will close them as "working as intended":
   and writes files in the folder you opened via the project picker. That is the
   intended feature. Reading files *outside* that root through the same IPC
   channel *is* a vulnerability.
-- **Auto-start engine and live-write missions execute real work.** Missions run
-  CLI agent loops that read the project and write files. That is what a mission
-  is. Dry-run mode exists for preview; the default is the user's choice.
+- **Auto-start engine and live-write missions execute real work.** Missions use
+  the CLI's `code` lane in the selected project. New profiles start with Live
+  writes off; existing preferences persist. Allow run controls mission command
+  execution and is off by default. The integrated terminal remains independent.
 - **Local model output can be wrong.** Bad suggestions, hallucinated diffs,
   garbage in the System Graph. Quality, not security.
-- **No cloud, no telemetry, no accounts** — and therefore no server-side
-  vulnerability surface to attack. There is nothing to breach but your own
-  machine.
+- **Local usage records; no application accounts or remote analytics.** The
+  local ledger stores model identifiers, token counts, and timing without
+  prompts or answers. Local work does not require a cloud service. Update
+  checks contact GitHub when requested, and configured CLI
+  adapters can contact other services. Treat their behavior separately from the
+  desktop's renderer boundary.
 
 ### Known architectural risk notes
 
@@ -164,10 +170,10 @@ against reality rather than against an imagined architecture:
 | ----------------------------------- | ------------ | ---------------------------------------------------------------------------------------------------- |
 | `contextIsolation`                  | **enforced** | Always `true` in `createWindow()`. The renderer cannot reach Node globals; the preload bridge is the only path. Do not relax this. |
 | `nodeIntegration`                   | **disabled** | Always `false`. Do not relax this.                                                                   |
-| `sandbox`                           | **off**      | `sandbox: false` in `webPreferences`. The renderer process is therefore not Chromium-sandboxed; the isolation boundary is `contextIsolation` plus the preload allowlist. Turning `sandbox` on is on the roadmap but is not yet done — treat renderer compromise as more likely than in a sandboxed app. |
+| `sandbox`                           | **enforced** | `sandbox: true` in `webPreferences`. The preload uses the supported Electron bridge without general Node access. Keep sandboxing enabled. |
 | Renderer trust assumption           | **strong**   | We assume the renderer is not compromised. Every `ipcMain.handle` is a trust boundary and must validate its arguments. New handlers must not assume the caller behaved. |
-| `window.open`                       | **blocked**  | `setWindowOpenHandler` denies in-app navigation and routes `http(s)` to the system browser. Keep it that way. |
-| External links                      | **unverified** | Any `http(s)` URL opened via `shell.openExternal` is passed through unvalidated. URL handling hardening is open work. |
+| Navigation and IPC frame           | **restricted** | The app blocks in-window external navigation and validates the caller's application frame before privileged IPC. |
+| External update links              | **validated** | Update feed and download URLs are restricted to the official repository and expected release/asset paths. Release notes are rendered as text. |
 | Code signing                        | **absent**   | Windows installers are **not currently code-signed**. See "Reporters, please note" below. Signing setup is tracked in `.github/workflows/release.yml`. |
 
 ### Reporters, please note
@@ -175,9 +181,24 @@ against reality rather than against an imagined architecture:
 - **Unsigned installers.** Windows will show SmartScreen warnings on
   first run of a downloaded build. That is a known gap, not a vulnerability. Do
   not report it as one — it is tracked as an engineering task.
-- **No Electron auto-update.** Updates are manual by design while the project
-  is pre-1.0. Dependabot keeps the pinned Electron range current; the actual
-  runtime is whatever the built installer contains.
+- **Manual installation.** Update controls check the latest published stable
+  GitHub Release and show changes on demand. They do not install or restart the
+  app. Drafts/prereleases are excluded; expected installer/checksum assets are
+  required for an installer offer. Checksums verify bytes, not publisher identity.
+
+### Update and help trust boundaries
+
+The update IPC does not accept a renderer-supplied feed URL. Requests use the
+fixed official GitHub API endpoint with time and response-size limits. Only
+approved repository release/download URLs can be opened externally; metadata
+from other hosts, mismatched versions, and missing assets cannot authorize an
+installer offer. Release notes are untrusted text, not executable HTML.
+
+Bundled Help accepts a fixed document allowlist, rather than arbitrary paths.
+Project reads/writes remain inside roots selected by the user; saves that carry
+an expected original content value reject a changed disk version. Truncated
+previews are not writable. These checks reduce accidental loss but do not
+replace version control, and the CLI/terminal retain their intended permissions.
 
 ---
 

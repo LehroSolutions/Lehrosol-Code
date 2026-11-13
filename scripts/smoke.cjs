@@ -296,7 +296,8 @@ const record = async (name, fn) => { await fn(); checks.push(name); console.log(
     await app.close();
     app = await launch({ executablePath, args: launchArgs, env });
     const reopened = await app.firstWindow();
-    await reopened.waitForFunction(() => state.info && state.ping && state.ping.ok);
+    await reopened.waitForURL(/\/index\.html$/);
+    await reopened.waitForFunction(() => typeof state !== 'undefined' && state.info && state.ping && state.ping.ok);
     assert.equal(await reopened.evaluate(() => localStorage.getItem('lc.port')), String(port));
     assert.equal((await reopened.evaluate(() => window.lehro.info())).appVersion, require('../package.json').version);
     assert.equal(await reopened.evaluate(() => JSON.parse(localStorage.getItem('lc.askHistory')).includes('wait')), true);

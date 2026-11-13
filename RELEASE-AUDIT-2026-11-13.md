@@ -12,13 +12,21 @@ packaged and installation gates pass.
   malformed model lists/non-text completions, and normalize invalid model rows.
 - Normalize corrupted saved layout data and preserve pending engine model
   selections across metric refreshes. Added regression coverage.
+- Preserve Unicode split across CLI/HTTP chunks. Isolate each test worker's
+  Lehro home so synthetic inference cannot write to the live usage ledger.
+  Dispose test scratch folders
+  and create sparse model fixtures so repeated Windows checks do not fill the
+  temporary drive.
 - Exercise the actual Windows installer build and packaged app in pull-request
   CI so source-only success cannot approve an unusable desktop artifact.
 
-Local validation: 79 desktop tests and 22 source Electron workflows passed
-before this changelog update. The final source fingerprint will be rechecked
-after the candidate is settled. Published CLI and real-engine evidence from the
-initial review remains scoped as documented there.
+The first audited revision passed 79 desktop tests, 22 source Electron workflows,
+and clean GitHub-hosted Windows/Linux CI, including the Windows installer build
+and packaged application smoke. The final revision passed 82 desktop tests
+locally and includes Unicode, test isolation, and fixture cleanup regressions.
+It will be checked through candidate preparation on the clean runner.
+Published CLI and real-engine evidence from the initial review remains scoped
+as documented there.
 
 ## Native startup investigation
 
@@ -26,9 +34,16 @@ Disassembly at the reported Windows breakpoint identifies Chromium child-process
 field-trial shared-memory initialization as the failing path. This refines the
 initial observation that edited executables fail on this host; it does not
 establish that the resource editor corrupts the executable. The same archive
-and an unchanged runtime launch successfully. Native logging and a clean
-GitHub-hosted Windows packaged smoke run are used to distinguish build defects
-from local host interactions. Renderer sandboxing remains enabled.
+and an unchanged runtime launch successfully. The fully branded installer and
+packaged app pass on GitHub's clean Windows runner at revision c7ef350, so the
+local startup failure is not reproduced there. This host's Avast autosandbox
+log explicitly records "Result: Sandboxing" and instrumentation for the same
+executables at the failed launch times. This explains why a host-specific
+containment interaction must be distinguished from a packaging regression.
+The initial review's resource-editing hypothesis is not established. Only
+validated synthetic fixtures from this task were removed to recover temporary
+disk space. No antivirus setting was changed, and renderer sandboxing remains
+enabled.
 
 Signing credentials are not configured locally or in the repository. The
 candidate is expected to be explicitly unsigned until a signing identity is

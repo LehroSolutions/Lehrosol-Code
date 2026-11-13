@@ -7,6 +7,12 @@ const fs = require('node:fs');
 const { join } = require('node:path');
 const { tmpdir } = require('node:os');
 
+test('test requests use an isolated Lehro home', () => {
+  const { resolve, sep, basename } = require('node:path');
+  assert.ok(resolve(process.env.LEHRO_HOME).startsWith(resolve(tmpdir()) + sep));
+  assert.ok(basename(process.env.LEHRO_HOME).startsWith('lehrosol-code-test-'));
+});
+
 test('imported workspace preferences discard unknown fields and clamp display values', () => {
   const layout = workspace.normalize({ primary: 'untrusted', agents: false, pins: ['engine', 'script', 'engine'], apiKey: 'secret' });
   assert.equal(layout.primary, 'output'); assert.equal(layout.agents, false);

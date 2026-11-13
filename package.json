@@ -22,7 +22,7 @@
   "scripts": {
     "start": "node scripts/start.js",
     "check": "node scripts/check.mjs",
-    "test": "node --test \"test-app/*.test.js\"",
+    "test": "node --import ./test-app/setup.mjs --test \"test-app/*.test.js\"",
     "smoke": "node scripts/smoke.cjs",
     "verify:installation": "powershell.exe -NoProfile -NonInteractive -File scripts/verify-installation.ps1",
     "dist": "electron-builder --win --x64 --publish=never",

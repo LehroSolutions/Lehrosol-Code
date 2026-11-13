@@ -8,6 +8,11 @@ import { createHash } from 'node:crypto';
 import sourceState from './source-state.cjs';
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
+const revision = spawnSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' });
+const status = spawnSync('git', ['status', '--porcelain'], { cwd: root, encoding: 'utf8' });
+if (revision.status !== 0 || status.status !== 0) throw new Error('Release preparation requires an identifiable Git checkout');
+const dirty = Boolean(status.stdout.trim());
+if (process.env.CI && dirty) throw new Error('CI release preparation requires an unchanged source checkout');
 const name = `Lehrosol.Code.Setup.${pkg.version}.exe`;
 const installer = join(root, 'dist', name);
 if (!existsSync(installer)) throw new Error(`Build the v${pkg.version} Windows installer first: pnpm dist`);
@@ -77,7 +82,19 @@ const notes = changelog.slice(start, end < 0 ? changelog.length : end).trim();
 writeFileSync(join(root, 'dist', 'SHA256SUMS'), `${sha256}  ${name}\n`);
 const signingNote = signature.status === 'NotSigned' ? 'This Windows installer is unsigned. Windows SmartScreen may warn. Verify SHA256SUMS before installing.' : `Installer Authenticode status: ${signature.status}.`;
 writeFileSync(join(root, 'dist', 'RELEASE-NOTES.md'), `${notes}\n\n### Installer signature\n\n${signingNote}\n`);
-const revision = spawnSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' });
-const status = spawnSync('git', ['status', '--porcelain'], { cwd: root, encoding: 'utf8' });
-writeFileSync(join(root, 'dist', 'release.json'), `${JSON.stringify({ version: pkg.version, platform: 'win32', arch: 'x64', installer: name, bytes: bytes.length, sha256, signing: signature.status, generatedAt: new Date().toISOString(), packagedDocs: true, installerPayloadVerified: true, appAsarSha256, sourceFingerprint: currentFingerprint, source: { revision: revision.status === 0 ? revision.stdout.trim() : null, dirty: status.status === 0 ? Boolean(status.stdout.trim()) : null }, tools: { node: process.version, electron: JSON.parse(readFileSync(join(root, 'node_modules', 'electron', 'package.json'), 'utf8')).version }, sourceHashes }, null, 2)}\n`);
+const manifest = {
+  version: pkg.version, platform: 'win32', arch: 'x64', installer: name,
+  bytes: bytes.length, sha256, signing: signature.status,
+  generatedAt: new Date().toISOString(), packagedDocs: true,
+  installerPayloadVerified: true, appAsarSha256, executableSha256,
+  sourceFingerprint: currentFingerprint,
+  source: { revision: revision.stdout.trim(), dirty },
+  tools: {
+    node: process.version,
+    electron: JSON.parse(readFileSync(join(root, 'node_modules', 'electron', 'package.json'), 'utf8')).version,
+    builder: JSON.parse(readFileSync(join(root, 'node_modules', 'electron-builder', 'package.json'), 'utf8')).version,
+  },
+  sourceHashes,
+};
+writeFileSync(join(root, 'dist', 'release.json'), `${JSON.stringify(manifest, null, 2)}\n`);
 console.log(`Prepared ${name}, SHA256SUMS, RELEASE-NOTES.md, and release.json; packaged docs verified.`);

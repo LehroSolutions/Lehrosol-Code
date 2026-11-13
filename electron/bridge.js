@@ -131,6 +131,8 @@ function runJson(args, timeoutMs = 600000) {
     let failure = null;
     let settled = false;
     let fallback = null;
+    child.stdout.setEncoding('utf8');
+    child.stderr.setEncoding('utf8');
     const finish = (result) => {
       if (settled) return;
       settled = true;
@@ -152,7 +154,7 @@ function runJson(args, timeoutMs = 600000) {
     const timer = setTimeout(() => stop(`CLI command timed out after ${duration} ms`, 'ETIMEDOUT'), duration);
     const capture = (data, stderr) => {
       if (failure || settled) return;
-      bytes += data.length;
+      bytes += Buffer.byteLength(data, 'utf8');
       if (bytes > 8 * 1024 * 1024) { stop('CLI command exceeded the 8 MiB output limit', 'EOUTPUTLIMIT'); return; }
       if (stderr) errOut += data.toString();
       else out += data.toString();
@@ -219,7 +221,8 @@ function pingServer(port, apiKey) {
     }, (res) => {
       let body = '';
       let bytes = 0;
-      res.on('data', (d) => { bytes += d.length; if (bytes > 512 * 1024) req.destroy(new Error('Engine model list exceeded the 512 KiB limit')); else body += d; });
+      res.setEncoding('utf8');
+      res.on('data', (d) => { bytes += Buffer.byteLength(d, 'utf8'); if (bytes > 512 * 1024) req.destroy(new Error('Engine model list exceeded the 512 KiB limit')); else body += d; });
       res.on('error', (err) => resolve({ ok: false, error: err.message, ms: Date.now() - started }));
       res.on('end', () => {
         const parsed = parseJsonLoose(body);
@@ -357,7 +360,8 @@ function chatOnce({ port, apiKey, prompt, system, model, source, maxTokens = 512
     }, (res) => {
       let raw = '';
       let bytes = 0;
-      res.on('data', (d) => { bytes += d.length; if (bytes > 8 * 1024 * 1024) req.destroy(new Error('Engine completion exceeded the 8 MiB limit')); else raw += d; });
+      res.setEncoding('utf8');
+      res.on('data', (d) => { bytes += Buffer.byteLength(d, 'utf8'); if (bytes > 8 * 1024 * 1024) req.destroy(new Error('Engine completion exceeded the 8 MiB limit')); else raw += d; });
       res.on('error', (err) => resolve({ ok: false, error: err.message, ms: Date.now() - started }));
       res.on('end', () => {
         const ms = Date.now() - started;

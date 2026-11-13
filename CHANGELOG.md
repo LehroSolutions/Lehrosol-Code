@@ -35,6 +35,8 @@ installer was publicly distributed for every version.
 - Reject malformed, interrupted, and oversized engine responses without crashing
   desktop IPC; recover corrupted saved layouts and retain model selections while
   engine metrics refresh.
+- Preserve Unicode across subprocess and engine response chunks; clean temporary
+  test directories and use sparse synthetic model files on Windows.
 - Bind packaged smoke approval to both executable and archive hashes, and reject
   invalid installer signatures during release preparation.
 - Read the displayed application version from the installed package.

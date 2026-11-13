@@ -127,7 +127,7 @@ If the CLI is not found: Settings → **Locate…** → pick
 pnpm test
 ```
 
-That runs `node --test "test-app/*.test.js"` — Node's built-in test runner, no
+That runs `node --import ./test-app/setup.mjs --test "test-app/*.test.js"` — Node's built-in test runner, no
 test framework to install.
 
 ### Verify the behavior you change
@@ -146,6 +146,11 @@ before publication. Check the packaged application as well as source mode.
 
 Do not weaken or delete a failing test to get to green. Fix the cause or say
 loudly that it is broken.
+
+The preload gives every test worker an isolated temporary `LEHRO_HOME` and
+cleans it up on exit. Include it when invoking Node's test runner directly, so
+synthetic requests cannot write to your real usage ledger. Model fixtures are
+sparse on Windows and their temporary directories are removed after the suite.
 
 There is also a manual QA harness in `test-app/` (`harness.html` plus the
 `harness-*.js` drivers) for exercising the bridge and the cockpit in a browser.

@@ -228,7 +228,8 @@ const evaluate = async expression => {
   else if (socket) socket.close();
   if (child && child.exitCode === null) {
     await Promise.race([new Promise(resolve => child.once('exit', resolve)), new Promise(resolve => setTimeout(resolve, 10000))]);
-    if (child.exitCode === null) spawnSync('taskkill', ['/PID', String(child.pid), '/T', '/F'], { windowsHide: true, encoding: 'utf8' });
+    if (child.exitCode === null) spawnSync('taskkill.exe', ['/PID', String(child.pid), '/T', '/F'], { windowsHide: true, encoding: 'utf8', timeout: 10000 });
+    child.stdout.destroy(); child.stderr.destroy(); child.unref();
   }
   fs.writeFileSync(output.replace(/\.json$/, '.startup.log'), launchLog);
 });

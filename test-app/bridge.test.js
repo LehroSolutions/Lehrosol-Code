@@ -4,12 +4,30 @@
 // zero-setup GGUF scanner, all against fakes (no real CLI or engine needed).
 const test = require('node:test');
 const assert = require('node:assert');
-const { mkdtempSync, writeFileSync, mkdirSync, truncateSync, chmodSync } = require('node:fs');
-const { join } = require('node:path');
+const { mkdtempSync: createTempDirectory, writeFileSync, mkdirSync, truncateSync, chmodSync, rmSync } = require('node:fs');
+const { join, resolve, sep } = require('node:path');
 const { tmpdir } = require('node:os');
 const http = require('node:http');
 
 const bridge = require('../electron/bridge');
+const temporaryDirectories = new Set();
+function mkdtempSync(prefix) {
+  const dir = createTempDirectory(prefix);
+  temporaryDirectories.add(dir);
+  return dir;
+}
+test.after(() => {
+  for (const dir of temporaryDirectories) {
+    assert.ok(resolve(dir).startsWith(resolve(tmpdir()) + sep));
+    rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+  }
+});
+
+function sizedModel(file, size) {
+  writeFileSync(file, 'x');
+  if (process.platform === 'win32') require('node:child_process').execFileSync('fsutil.exe', ['sparse', 'setflag', file], { windowsHide: true, timeout: 5000, stdio: 'pipe' });
+  truncateSync(file, size);
+}
 
 function makeFakeCli(dir) {
   const file = join(dir, 'fake-lehrosol.js');
@@ -90,6 +108,17 @@ test('windows cmd line survives paths with spaces (Home Station bug)', () => {
   assert.strictEqual(bridge.winCmdQuote('--json'), '--json');
   assert.strictEqual(bridge.winCmdQuote('two words'), '"two words"');
   assert.strictEqual(bridge.winCmdQuote('say "hi"'), '"say ""hi"""');
+});
+
+test('runJson preserves Unicode split across subprocess output chunks', async (t) => {
+  const dir = mkdtempSync(join(tmpdir(), 'lc-unicode-'));
+  const file = join(dir, 'cli.js');
+  t.after(() => require('node:fs').rmSync(dir, { recursive: true, force: true }));
+  writeFileSync(file, `const text=Buffer.from(JSON.stringify({ok:true,answer:'héllo 🌍'}));const split=text.indexOf(Buffer.from('🌍'))+2;process.stdout.write(text.subarray(0,split));setTimeout(()=>process.stdout.write(text.subarray(split)),100);`);
+  process.env.LEHROSOL_BIN = file;
+  const result = await bridge.runJson([]);
+  assert.equal(result.ok, true);
+  assert.equal(result.data.answer, 'héllo 🌍');
 });
 
 test('findLehrosol honours LEHROSOL_BIN and flags .js for node execution', () => {
@@ -266,6 +295,22 @@ test('chatOnce reports unreachable engines cleanly', async () => {
   assert.ok(res.error);
 });
 
+test('engine JSON preserves Unicode across response chunks', async (t) => {
+  const server = http.createServer((req, res) => {
+    req.resume();
+    const response = req.url === '/v1/models' ? { data: [{ id: 'model 🌍' }] } : { choices: [{ message: { content: 'héllo 🌍' } }] };
+    const bytes = Buffer.from(JSON.stringify(response));
+    const split = bytes.indexOf(Buffer.from('🌍')) + 2;
+    res.write(bytes.subarray(0, split));
+    setTimeout(() => res.end(bytes.subarray(split)), 50);
+  });
+  await new Promise((done) => server.listen(0, '127.0.0.1', done));
+  t.after(() => new Promise((done) => { server.closeAllConnections(); server.close(done); }));
+  const port = server.address().port;
+  assert.deepEqual((await bridge.pingServer(port)).models, ['model 🌍']);
+  assert.equal((await bridge.chatOnce({ port, prompt: 'hello' })).text, 'héllo 🌍');
+});
+
 test('engine responses reject malformed content, oversized bodies, and interrupted transfers', async (t) => {
   let response = { data: [null, {}, { id: 'alpha' }] };
   let interrupted = false;
@@ -295,12 +340,9 @@ test('nativeScan finds GGUF models, rates fit, and pairs projectors', () => {
   const root = mkdtempSync(join(tmpdir(), 'lc-models-'));
   const alphaDir = join(root, 'alpha-7b');
   mkdirSync(alphaDir);
-  writeFileSync(join(alphaDir, 'alpha-7b-Q4_K_M.gguf'), 'x');
-  truncateSync(join(alphaDir, 'alpha-7b-Q4_K_M.gguf'), 300 * 1024 * 1024);
-  writeFileSync(join(alphaDir, 'mmproj-alpha.gguf'), 'x');
-  truncateSync(join(alphaDir, 'mmproj-alpha.gguf'), 50 * 1024 * 1024);
-  writeFileSync(join(root, 'beta-1b-IQ4_XS.gguf'), 'x');
-  truncateSync(join(root, 'beta-1b-IQ4_XS.gguf'), 200 * 1024 * 1024);
+  sizedModel(join(alphaDir, 'alpha-7b-Q4_K_M.gguf'), 300 * 1024 * 1024);
+  sizedModel(join(alphaDir, 'mmproj-alpha.gguf'), 50 * 1024 * 1024);
+  sizedModel(join(root, 'beta-1b-IQ4_XS.gguf'), 200 * 1024 * 1024);
   const scan = bridge.nativeScan([root]);
   const ids = scan.models.map((m) => m.id);
   assert.ok(ids.includes('alpha-7b'), `expected alpha-7b in ${ids}`);

@@ -33,19 +33,19 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       # pnpm must be installed BEFORE actions/setup-node so that `cache: pnpm`
       # can resolve `pnpm store path`. The version comes from the
       # `packageManager` field in package.json (pnpm@11.15.1) so this workflow
       # can never drift from what the repo pins.
       - name: Install pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@v6
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
-          # 22.13 is the real floor, not 22.12: Electron 44 tooling wants
+          # 22.13 is the real floor, not 22.12: Electron tooling wants
           # >= 22.12.0, but pnpm 11.15.1 refuses to run below Node 22.13
           # ("ERROR: This version of pnpm requires at least Node.js v22.13"),
           # which fails the `cache: pnpm` step before install even starts.
@@ -55,5 +55,31 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Audit release-tool dependencies
+        run: pnpm audit --audit-level high
+
       - name: Test
         run: pnpm test
+
+      - name: Check syntax, metadata, and docs
+        run: pnpm check
+
+      - name: Exercise Electron workflows
+        if: runner.os == 'Windows'
+        run: pnpm smoke
+
+      - name: Build Windows installer
+        if: runner.os == 'Windows'
+        run: pnpm dist
+
+      - name: Exercise packaged application
+        if: runner.os == 'Windows'
+        run: pnpm smoke --packaged
+
+      - name: Upload desktop QA
+        if: always() && runner.os == 'Windows'
+        uses: actions/upload-artifact@v7
+        with:
+          name: desktop-qa
+          path: dist/qa/
+          if-no-files-found: warn

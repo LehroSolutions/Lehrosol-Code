@@ -15,14 +15,15 @@ desktop front-end of LehroSol:
 
 - A **model vault** that finds GGUF files on your drives with no configuration,
   rates them against your actual RAM, and serves them.
-- **Agent missions** — HELIX loop runs streamed live as mission cards.
+- **Agent missions** — the CLI's hands-on `code` lane streamed as mission cards.
 - A **live system graph** of vault, engine, adapters, loops and ENGRAM memory.
 - An **editor with AI suggestions** powered by your own local model.
 - An **integrated terminal** — a real shell, not a simulation.
 - A **model test bench** for latency and tokens/sec across the models you own.
 
-It runs local GGUF models through a llama.cpp-compatible HTTP engine, and it is
-designed to work fully offline with zero configuration.
+It runs local GGUF models through a llama.cpp-compatible HTTP engine. Local
+editing and inference work offline once prerequisites are installed. The
+on-demand Update controls contact GitHub for public release metadata.
 
 ### It is one product across two repositories
 
@@ -90,7 +91,7 @@ Enable pnpm through Corepack so the pinned version is used automatically:
 corepack enable pnpm
 ```
 
-If Corepack is unavailable: `npm i -g pnpm@latest-11`.
+If Corepack is unavailable: `npm i -g pnpm@11.15.1`.
 
 **Do not use plain `npm install`.** The repo depends on a hoisted
 `node_modules` layout — `pnpm-workspace.yaml` sets `nodeLinker: hoisted` because
@@ -129,23 +130,19 @@ pnpm test
 That runs `node --test "test-app/*.test.js"` — Node's built-in test runner, no
 test framework to install.
 
-### Be honest about the coverage gap
+### Verify the behavior you change
 
-**The suite covers `electron/bridge.js` and path confinement.** 32 tests
-exercise CLI spawning, the Windows command-line quoting, `LEHROSOL_BIN`
-resolution, JSON parsing, vault roots, serve state, engine pings, chat
-round-trips, the native GGUF scanner, `listTree`, and the v2.4 quick-lane
-commands, plus traversal and symlink confinement in `electron/pathConfinement.js`.
+The Node suite exercises the CLI bridge, Windows command spawning, JSON/error
+contracts, engine requests, model scanning, filesystem confinement, update
+metadata, and covered renderer workflows. `pnpm check` checks source syntax and
+release consistency. `pnpm smoke` exercises the actual Electron application and
+preload/IPC using temporary state and a synthetic engine.
 
-There is **no automated coverage** for:
-
-- `electron/main.js` — the IPC surface, window creation, terminal spawning.
-- `renderer/app.js` — the entire UI, ~1400 lines.
-- `electron/preload.js` — the context bridge.
-
-This is a known and acknowledged gap, not an oversight. If your change touches
-`main.js`, `preload.js`, or the renderer, **you are the one adding coverage for
-it.** A change to a path with no tests and no new tests is not ready.
+Add focused regression coverage when changing a workflow or trust boundary.
+Synthetic engine output does not prove model quality, actual GGUF startup,
+Windows 10 installer behavior, or every application state. Record those limits
+and complete the release acceptance checks in [RELEASING.md](RELEASING.md)
+before publication. Check the packaged application as well as source mode.
 
 Do not weaken or delete a failing test to get to green. Fix the cause or say
 loudly that it is broken.
@@ -271,8 +268,7 @@ not be able to turn it into arbitrary code execution.
 7. **Send the minimum the renderer needs.** Do not pass whole objects with
    extra fields across `webContents.send`.
 8. **Do not relax the renderer lockdown.** `contextIsolation: true` and
-   `nodeIntegration: false` are enforced. (`sandbox` is currently `false`; that
-   is tracked open work, not an invitation.)
+   `nodeIntegration: false` and `sandbox: true` are enforced.
 
 ### If your PR adds or changes an IPC channel
 
@@ -286,6 +282,12 @@ Your PR description must state, in your own words:
 A new IPC channel with no such note will not be merged. If your change touches
 `main.js`, `bridge.js`, or `preload.js`, say explicitly in the PR whether you
 consulted the checklist in `SECURITY.md`.
+
+The update IPC accepts no caller-supplied feed URL. Metadata comes from the
+fixed official repository, notes are text, and download URLs must match its
+approved release path/version and asset rules. Help accepts only the bundled
+document allowlist. Keep both restrictions when adding controls. Update checks
+must remain user-initiated and must not install or restart the app silently.
 
 ### Reporting vulnerabilities
 

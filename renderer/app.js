@@ -8,8 +8,19 @@
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 const bridge = window.lehro || null;
-const APP_VERSION = '2.4.0'; // single source for UI version strings
+let APP_VERSION = 'unknown';
 const attr = (s) => esc(s).replace(/"/g, '&quot;');
+
+function loadAskHistory() {
+  try {
+    const value = JSON.parse(localStorage.getItem('lc.askHistory') || '[]');
+    return Array.isArray(value) ? value.filter((item) => typeof item === 'string').slice(0, 25) : [];
+  } catch { return []; }
+}
+
+function validPort(value) {
+  return /^\d+$/.test(String(value)) && Number(value) >= 1 && Number(value) <= 65535;
+}
 
 const WELCOME = [
   'Welcome to Lehrosol Code — the agentic IDE for the models on YOUR drive.',
@@ -28,7 +39,7 @@ const WELCOME = [
   '  5. Code     Open a project folder, edit files, and use AI Suggestion',
   '              to have your local model rewrite the open file.',
   '',
-  'Missions use live writes by default inside the project you opened. Turn them off for a preview-only dry run.',
+  'Missions start in dry-run mode. Enable live writes to allow changes in the project you opened.',
   '',
   'New (v2.4): CLI version handshake, one-click engine via the CLI\u2019s \u201cup\u201d lane, arena model racing, CLI-native scan that registers folders straight into the shared vault, and the Memory panel back online (the CLI renamed it to \u201cengrams\u201d).',
 ].join('\n');
@@ -36,7 +47,7 @@ const WELCOME = [
 const state = {
   view: 'code',
   theme: localStorage.getItem('lc.theme') || 'dark',
-  askHistory: JSON.parse(localStorage.getItem('lc.askHistory') || '[]'),
+  askHistory: loadAskHistory(),
   askHistIdx: -1,
   info: null,
   snapshot: null,
@@ -135,8 +146,9 @@ function logEvent(msg) {
 }
 function appendPane(id, text) {
   const el = $(id);
-  el.textContent += text;
-  el.parentElement.scrollTop = el.parentElement.scrollHeight;
+  const follow = el.parentElement.scrollHeight - el.parentElement.scrollTop - (el.parentElement.clientHeight || 0) < 80;
+  el.textContent = (el.textContent + text).slice(-256000);
+  if (follow) el.parentElement.scrollTop = el.parentElement.scrollHeight;
 }
 function openModal(html) { $('modalBox').innerHTML = html; $('modal').classList.remove('hidden'); }
 function closeModal() { $('modal').classList.add('hidden'); }
@@ -164,6 +176,7 @@ function normalizeVaultModels(data) {
     fit: String(m.fit || m.rating || '').toUpperCase() || null,
     file: m.path || m.file || null,
     role: m.role || m.hint || '',
+    contextWindow: Number(m.contextWindow) > 0 ? Number(m.contextWindow) : null,
     source: 'vault',
   }));
 }
@@ -223,6 +236,7 @@ function renderTopbar() {
   dot.className = `dot ${up ? 'dot-green' : 'dot-gray'}`;
   $('stAiDot').className = `dot ${up ? 'dot-green' : 'dot-gray'}`;
   $('stAiText').textContent = up ? `AI · ${String(model || '').slice(0, 22)}` : 'AI offline';
+  renderFooter();
 }
 
 function renderMissionPanel() {
@@ -234,6 +248,7 @@ function renderMissionPanel() {
       <div class="engine-row"><span class="dot ${up ? 'dot-green' : 'dot-red'}"></span><span class="flex1">${up ? 'Engine online' : 'Engine offline'}</span>
         <button class="btn-ghost" id="btnEngineAction">${up ? 'Stop' : 'Start'}</button></div>
       <div class="engine-meta">${up ? `${esc(String(model || ''))} · :${enginePort()} · ${state.ping.ms}ms` : (model ? `last: ${esc(String(model))}` : 'no model served yet')}</div>
+      <button class="btn-ghost" id="btnEngineDetails">Engine &amp; context →</button>
     </div>`;
   const missions = state.missions.filter((m) => !filter || m.prompt.toLowerCase().includes(filter));
   const cards = missions.map((m) => `
@@ -246,6 +261,7 @@ function renderMissionPanel() {
       ${(m.changedFiles && m.changedFiles.length) ? `<div class="mission-files">${m.changedFiles.slice(0, 4).map((f) => `<button class="file-chip" data-openfile="${attr(f)}">${esc(f.split(/[\\/]/).pop())}</button>`).join('')}</div>` : ''}
       <div class="mission-foot">
         <span>${m.ms != null ? `${(m.ms / 1000).toFixed(1)}s` : `started ${new Date(m.startedAt).toLocaleTimeString()}`}</span>
+        <button class="btn-ghost" data-mission-output="${attr(m.id)}">Open output ↗</button>
         ${m.status === 'running' ? `<button class="mission-cancel" data-cancel="${m.id}">cancel</button>` : ''}
         ${m.status === 'failed' ? `<button class="mission-cancel" data-retry="${m.id}">retry compact</button>` : ''}
       </div>
@@ -253,6 +269,8 @@ function renderMissionPanel() {
   $('agentList').innerHTML = engineCard + (cards || '<div class="alt-sub" style="padding:6px 4px">No missions yet. Type in the ask bar below — each prompt becomes a live agent mission.</div>');
   const btn = $('btnEngineAction');
   if (btn) btn.addEventListener('click', () => { if (engineUp()) stopEngine(); else quickStart(); });
+  $('btnEngineDetails').addEventListener('click', () => switchView('engine'));
+  document.querySelectorAll('[data-mission-output]').forEach((el) => el.addEventListener('click', () => showMissionOutput(el.dataset.missionOutput)));
   document.querySelectorAll('[data-cancel]').forEach((el) => el.addEventListener('click', () => cancelMission(el.dataset.cancel)));
   // One-click recovery: re-run a failed mission with the smallest context.
   document.querySelectorAll('[data-retry]').forEach((el) => el.addEventListener('click', () => {
@@ -270,13 +288,12 @@ function renderMissionPanel() {
 function renderTabs() {
   $('tabsBar').innerHTML = state.tabs.map((t, i) => `
     <button class="tab ${i === state.activeTab ? 'active' : ''}" data-tab="${i}">
-      <span class="tab-ico">${esc(t.ico)}</span>${esc(t.name)}${state.tabs.length > 1 ? `<span class="tab-x" data-close="${i}">×</span>` : ''}
+      <span class="tab-ico">${esc(t.ico)}</span>${esc(t.name)}${isDirty(state.openFiles[t.path]) ? ' •' : ''}${state.tabs.length > 1 ? `<span class="tab-x" data-close="${i}">×</span>` : ''}
     </button>`).join('') + '<button class="tab" id="tabPlus">+</button>';
   document.querySelectorAll('#tabsBar .tab[data-tab]').forEach((el) => {
     el.addEventListener('click', (e) => {
       if (e.target.dataset.close !== undefined) { closeTab(Number(e.target.dataset.close)); return; }
-      state.activeTab = Number(el.dataset.tab);
-      renderTabs(); renderEditor();
+      selectTab(Number(el.dataset.tab));
     });
   });
   const plus = $('tabPlus');
@@ -284,17 +301,40 @@ function renderTabs() {
 }
 
 function closeTab(i) {
+  syncEditorDraft();
   const t = state.tabs[i];
-  if (t) delete state.openFiles[t.name];
+  if (t && isDirty(state.openFiles[t.path]) && !window.confirm(`Discard unsaved changes to ${t.name}?`)) return;
+  if (t) delete state.openFiles[t.path];
+  state.editing = false;
   state.tabs.splice(i, 1);
   if (!state.tabs.length) state.tabs = [{ name: 'Welcome', ico: '\u2b21' }];
+  if (i < state.activeTab) state.activeTab -= 1;
   state.activeTab = Math.max(0, Math.min(state.activeTab, state.tabs.length - 1));
-  renderTabs(); renderEditor();
+  renderTabs(); renderEditor(); renderSuggestion(null);
 }
 
 function currentFile() {
   const t = state.tabs[state.activeTab];
-  return t ? state.openFiles[t.name] : null;
+  return t ? state.openFiles[t.path] : null;
+}
+
+function isDirty(file) { return Boolean(file && file.content !== file.savedContent); }
+
+function syncEditorDraft() {
+  const file = currentFile();
+  if (state.editing && file && !file.truncated) file.content = $('editorTextarea').value;
+}
+
+function selectTab(index) {
+  syncEditorDraft();
+  state.editing = false;
+  state.activeTab = index;
+  renderTabs(); renderEditor(); renderSuggestion(null);
+}
+
+function hasUnsavedChanges() {
+  syncEditorDraft();
+  return Object.values(state.openFiles).some(isDirty);
 }
 
 function renderEditor() {
@@ -303,6 +343,13 @@ function renderEditor() {
   const crumbs = file && file.path ? file.path.split(/[\\/]/).slice(-3) : ['Lehrosol Code', t ? t.name : ''];
   $('crumbs').innerHTML = crumbs.map((c) => esc(c)).join(' <span class="dim">/</span> ');
   const text = file ? file.content : WELCOME;
+  $('editorTextarea').classList.toggle('hidden', !state.editing || !file || file.truncated);
+  $('editorPre').classList.toggle('hidden', state.editing && Boolean(file) && !file.truncated);
+  if (state.editing && file) $('editorTextarea').value = file.content;
+  $('btnEditToggle').disabled = !file || Boolean(file.truncated);
+  $('btnSaveFile').disabled = !file || Boolean(file.truncated);
+  $('btnAISuggest').disabled = !file || Boolean(file.truncated);
+  $('btnSaveFile').title = file && file.truncated ? 'Large file preview is read-only' : 'Save (Ctrl+S)';
   const lines = text.split('\n');
   $('editorCode').innerHTML = lines.map((line, i) => `<div class="cl"><span class="ln">${i + 1}</span><span>${(file ? highlight(line) : esc(line)) || '&nbsp;'}</span></div>`).join('');
   $('stLine').textContent = `Ln ${lines.length}, Col 1`;
@@ -352,17 +399,22 @@ function renderTimeline() {
 }
 
 /* ---------------- live world ---------------- */
-async function refreshLive() {
-  if (!bridge) return;
-  const hasCli = state.info && state.info.cli;
-  const [snapRes, serveRes] = await Promise.all([
-    hasCli ? bridge.snapshot() : Promise.resolve(null),
-    bridge.serveState(),
-  ]);
-  if (snapRes && snapRes.data) state.snapshot = snapRes.data;
-  state.serve = serveRes;
-  state.ping = await bridge.ping({ port: enginePort(), apiKey: state.settings.apiKey });
-  buildLiveWorld();
+let refreshPromise = null;
+function refreshLive() {
+  if (!bridge) return Promise.resolve();
+  if (refreshPromise) return refreshPromise;
+  refreshPromise = (async () => {
+    state.serve = await bridge.serveState();
+    state.ping = await bridge.ping({ port: enginePort(), apiKey: state.settings.apiKey });
+    buildLiveWorld();
+    await refreshMetrics();
+    if (state.info && state.info.cli) {
+      const snapRes = await bridge.snapshot();
+      if (snapRes.ok && snapRes.data) state.snapshot = snapRes.data;
+      buildLiveWorld();
+    }
+  })().catch((err) => logEvent(`Refresh failed: ${err.message}`)).finally(() => { refreshPromise = null; });
+  return refreshPromise;
 }
 
 function buildLiveWorld() {
@@ -478,13 +530,26 @@ function engineHasModel(id) {
 }
 
 async function forceStopEnginePort() {
-  const port = String(state.settings.port);
+  const port = String(enginePort());
   logEvent(`forcing listener shutdown on :${port}`);
   await bridge.runJson(['serve', 'stop', '--port', port, '--force', '--json'], 30000);
   return waitEngineDown();
 }
 
 async function serveModel(id) {
+  if (engineBusy) return { ok: false, error: 'Engine operation already in progress' };
+  if (state.missions.some((m) => m.status === 'running')) { toast('Finish or cancel the current mission before switching models.'); return { ok: false }; }
+  engineBusy = true; engineFailure = ''; renderFooter();
+  if (state.view === 'engine') renderEngineView();
+  try {
+    const result = await serveModelImpl(id);
+    if (result && !result.ok) engineFailure = String(result.error || result.data?.diagnostic || result.data?.reason || 'Engine failed to start').slice(0, 2000);
+    return result;
+  } catch (err) { engineFailure = err.message; toast(`Engine failed: ${err.message}`); return { ok: false, error: err.message }; }
+  finally { engineBusy = false; renderFooter(); if (state.view === 'engine') renderEngineView(); }
+}
+
+async function serveModelImpl(id) {
   if (!bridge) return;
   if (!(state.info && state.info.cli)) { toast('Connect the LehroSol CLI first (Settings)'); switchView('settings'); return; }
   const serveId = await resolveServeId(id);
@@ -528,6 +593,7 @@ async function serveModel(id) {
 }
 
 async function stopEngine() {
+  if (state.missions.some((m) => m.status === 'running')) { toast('Cancel the current mission before stopping its engine.'); return; }
   if (!bridge || !(state.info && state.info.cli)) return;
   const res = await bridge.runJson(['serve', 'stop', '--json'], 30000);
   toast(res.ok ? 'Engine stopped' : 'No tracked engine to stop');
@@ -569,7 +635,8 @@ function renderStatusMission() {
   el.classList.remove('hidden');
 }
 function applyThemeSetting() {
-  document.body.classList.toggle('light', state.theme === 'light');
+  appearance.theme = state.theme;
+  applyAppearance();
 }
 async function undoLastMission() {
   closePalette();
@@ -599,17 +666,20 @@ function runMission(prompt) {
   localStorage.setItem('lc.askHistory', JSON.stringify(state.askHistory));
   state.askHistIdx = -1;
   const id = `m${state.missionSeq += 1}`;
-  const mission = { id, prompt, status: 'running', phase: 'starting', startedAt: Date.now(), ms: null, tail: [], step: 0, total: 0, changedFiles: [], contextMode };
+  const mission = { id, prompt, model: servedModel() || state.ping?.models?.[0], project: state.projectDir, dryRun: !live, allowRun, status: 'running', phase: 'starting', startedAt: Date.now(), ms: null, tail: [], activity: [], raw: '', step: 0, total: 0, changedFiles: [], contextMode };
   state.missions.unshift(mission);
+  state.missions = state.missions.filter((m, i) => i < 30 || m.status === 'running');
+  outputSelection = id;
   renderMissionPanel(); renderTopbar();
   appendPane('outputOut', `\n\u25b8 [${id}] mission: ${prompt}${live ? '' : '  (dry run)'}\n`);
-  switchBottomTab('output');
-  setBottomCollapsed(false);
+  if (state.view !== 'code' || !layout.split) switchView('output');
+  renderOutput();
   // v2.1.6 sent prompts to `loop run` - the scoring/verdict harness - which
   // never reads files or answers questions (a dry run makes NO model calls).
   // The `code` lane (CLI >= 3.0.17) is the hands-on agent: it lists and reads
   // the project, works the task, and reports an honest summary.
-  const args = ['code', prompt, '--port', String(state.settings.port), '--apiKey', state.settings.apiKey, '--reasoning', state.reasoning, '--resourceProfile', state.resourceProfile, '--contextMode', contextMode];
+  const args = ['code', prompt, '--port', String(enginePort()), '--apiKey', state.settings.apiKey, '--reasoning', state.reasoning, '--resourceProfile', state.resourceProfile, '--contextMode', contextMode];
+  if (state.info?.codeEvents) args.push('--events');
   if (!live) args.push('--dryRun');
   if (allowRun) args.push('--allowRun');
   if (state.profileNeedsRestart) args.push('--restart');
@@ -617,7 +687,10 @@ function runMission(prompt) {
     if (!res.ok) {
       mission.status = 'failed';
       mission.tail.push(res.error || 'failed to start');
+      mission.ms = Date.now() - mission.startedAt;
+      workspace.feed(mission, `Unable to start: ${res.error || 'unknown error'}\n`);
       renderMissionPanel();
+      renderOutput(); renderFooter();
       appendPane('outputOut', `\u2717 ${res.error}\n`);
     }
   });
@@ -629,6 +702,7 @@ function cancelMission(id) {
   const m = state.missions.find((x) => x.id === id);
   if (m && m.status === 'running') { m.status = 'cancelled'; m.ms = Date.now() - m.startedAt; }
   renderMissionPanel();
+  renderOutput(); renderFooter();
   logEvent(`mission ${id} cancelled`);
 }
 
@@ -638,7 +712,8 @@ if (bridge) {
     if (kind === 'data') {
       appendPane('outputOut', msg.chunk);
       if (m) {
-        const lines = String(msg.chunk).split('\n').map((s) => s.trim()).filter(Boolean);
+        workspace.feed(m, msg.chunk);
+        const lines = m.tail;
         for (const line of lines) {
           const phase = line.match(PHASE_RE);
           if (phase) m.phase = phase[1].toLowerCase();
@@ -646,14 +721,13 @@ if (bridge) {
           if (step) { m.step = Number(step[1]); m.total = Number(step[2]); }
           const files = line.match(/Files changed[:\s]+(.+)$/i);
           if (files && !/\(none/.test(files[1])) m.changedFiles = files[1].split(',').map((s) => s.trim()).filter(Boolean);
-          m.tail.push(line);
         }
-        m.tail = m.tail.slice(-6);
-        renderMissionPanel();
+        scheduleOutputRender();
       }
     } else {
+      if (m) workspace.feed(m, '', true);
       if (m && m.status === 'running') {
-        m.status = msg.code === 0 ? 'done' : 'failed';
+        m.status = msg.code === 0 && m.result?.ok !== false ? 'done' : 'failed';
         m.ms = Date.now() - m.startedAt;
       }
       appendPane('outputOut', `\n\u25aa [${msg.id}] mission ended (exit ${msg.code})\n`);
@@ -662,6 +736,7 @@ if (bridge) {
         notify(`Mission ${m.status} in ${((m.ms || 0) / 1000).toFixed(1)}s${(m.changedFiles && m.changedFiles.length) ? ` · ${m.changedFiles.length} file(s) changed` : ''}: ${m.prompt.slice(0, 40)}`);
       }
       renderMissionPanel(); renderTopbar();
+      renderOutput(); refreshMetrics();
     }
   });
 }
@@ -669,30 +744,51 @@ if (bridge) {
 /* ---------------- terminal ---------------- */
 let termReady = false;
 let termWired = false;
-function ensureTerminal() {
+let termId = null;
+let termSeq = 0;
+let termStarting = null;
+async function ensureTerminal() {
   if (termReady || !bridge) return;
-  termReady = true;
-  bridge.termCreate({ id: 't1', cwd: state.projectDir || undefined }).then((res) => {
-    appendPane('termOut', res.ok ? `[${res.shell}${state.projectDir ? ' — ' + state.projectDir : ''}]\n` : `terminal error: ${res.error}\n`);
-  });
-  if (termWired) return; // listeners survive shell restarts — wire them once
-  termWired = true;
-  bridge.onTerm((kind, msg) => {
-    if (kind === 'data') appendPane('termOut', msg.chunk);
-    else appendPane('termOut', `\n[shell exited ${msg.code}]\n`);
-  });
+  if (termStarting) return termStarting;
+  if (!termWired) {
+    termWired = true;
+    bridge.onTerm((kind, msg) => {
+      if (msg.id !== termId) return;
+      if (kind === 'data') appendPane('termOut', msg.chunk);
+      else { termReady = false; appendPane('termOut', `\n[shell exited ${msg.code}]\n`); }
+    });
+  }
+  const id = `t${++termSeq}`;
+  termId = id;
+  termStarting = (async () => {
+    try {
+      const res = await bridge.termCreate({ id, cwd: state.projectDir || undefined });
+      if (termId !== id) return;
+      termReady = Boolean(res.ok);
+      appendPane('termOut', res.ok ? `[${res.shell}${state.projectDir ? ' — ' + state.projectDir : ''}]\n` : `terminal error: ${res.error}\n`);
+    } catch (err) {
+      if (termId === id) termReady = false;
+      appendPane('termOut', `terminal error: ${err.message}\n`);
+    } finally { termStarting = null; }
+  })();
+  return termStarting;
 }
-function termSubmit(cmd) {
+async function termSubmit(cmd) {
   if (!bridge) return;
-  bridge.termInput({ id: 't1', data: cmd + '\n' });
+  await ensureTerminal();
+  if (!termReady) return;
+  const res = await bridge.termInput({ id: termId, data: cmd + '\n' });
+  if (!res.ok) { termReady = false; appendPane('termOut', `terminal error: ${res.error || 'shell unavailable'}\n`); }
 }
 
 /* ---------------- views ---------------- */
 function switchView(view) {
   state.view = view;
+  afterViewChange(view);
   document.querySelectorAll('.rail-btn[data-view]').forEach((b) => b.classList.toggle('active', b.dataset.view === view));
   const alt = $('viewAlt');
   const code = $('viewCode');
+  if (view === 'output') { code.classList.add('hidden'); alt.classList.add('hidden'); return; }
   if (view === 'code') { alt.classList.add('hidden'); code.classList.remove('hidden'); return; }
   code.classList.add('hidden'); alt.classList.remove('hidden');
   if (view === 'vault') renderVaultView();
@@ -754,7 +850,8 @@ async function benchRun(modelId, label, prompt, maxTokens) {
   const okServe = await ensureServed(modelId);
   if (!okServe) { logEvent(`bench: could not serve ${modelId}`); return { ok: false, model: modelId, label, error: 'engine failed to start' }; }
   logEvent(`bench: ${label} on ${modelId}`);
-  const res = await bridge.chat({ port: enginePort(), apiKey: state.settings.apiKey, prompt, maxTokens });
+  const res = await bridge.chat({ port: enginePort(), apiKey: state.settings.apiKey, model: modelId, source: 'desktop-bench', prompt, maxTokens });
+  refreshMetrics();
   const entry = { model: modelId, label, ok: res.ok, ms: res.ms, tokens: res.tokens, tokPerSec: res.tokPerSec, text: res.ok ? res.text : (res.error || 'failed'), at: new Date().toLocaleTimeString() };
   state.bench.unshift(entry);
   timelinePush(`bench ${modelId.slice(0, 18)}`, res.ok ? `${res.tokPerSec ?? '?'} tok/s` : 'failed', res.ok);
@@ -847,12 +944,16 @@ function benchResultHtml(b) {
 }
 
 /* ---------------- other views ---------------- */
+let filesRequest = 0;
 async function renderFilesView() {
+  const request = ++filesRequest;
+  const dir = state.projectDir;
   const alt = $('viewAlt');
   alt.innerHTML = `<div class="alt-title">Files</div><div class="alt-sub">${state.projectDir ? esc(state.projectDir) : 'No project open.'}</div><button class="btn btn-green" id="btnOpenProject">Open Project Folder</button><div id="treeList" style="margin-top:12px"></div>`;
   $('btnOpenProject').addEventListener('click', pickProject);
   if (state.projectDir && bridge) {
-    const tree = await bridge.projectTree({ dir: state.projectDir });
+    const tree = await bridge.projectTree({ dir });
+    if (request !== filesRequest || state.view !== 'files' || state.projectDir !== dir || !$('treeList')) return;
     if (!Array.isArray(tree)) { state.tree = []; $('treeList').innerHTML = ''; toast(tree.error || 'Project folder unavailable'); return; }
     state.tree = tree;
     $('treeList').innerHTML = treeHtml(state.tree, 0);
@@ -866,13 +967,23 @@ function treeHtml(entries, depth) {
 }
 async function pickProject() {
   if (!bridge) return;
+  if (hasUnsavedChanges() && !window.confirm('Discard unsaved edits and open another project?')) return;
   const dir = await bridge.projectPick();
   if (!dir) return;
   state.projectDir = dir;
+  state.tree = [];
+  state.tabs = [{ name: 'Welcome', ico: '\u2b21' }];
+  state.openFiles = {};
+  state.activeTab = 0;
+  state.editing = false;
+  renderTabs(); renderEditor(); renderSuggestion(null);
   // Re-home the integrated terminal: the old shell was started in whatever
   // folder the GUI launched from, not the project the user just opened.
-  if (termReady) {
-    await bridge.termKill({ id: 't1' });
+  if (termReady || termStarting) {
+    if (termStarting) await termStarting;
+    const oldId = termId;
+    termId = null;
+    await bridge.termKill({ id: oldId });
     termReady = false;
     appendPane('termOut', `\n[terminal re-homed to ${dir}]\n`);
     ensureTerminal();
@@ -880,16 +991,25 @@ async function pickProject() {
   renderTopbar();
   if (state.view === 'files') renderFilesView();
 }
+let openFileRequest = 0;
 async function openFile(path) {
+  if (!bridge) return;
+  const request = ++openFileRequest;
+  syncEditorDraft();
+  const existing = state.tabs.findIndex((t) => t.path === path);
+  if (existing >= 0) { selectTab(existing); switchView('code'); return; }
+  const project = state.projectDir;
   const res = await bridge.projectRead({ file: path });
+  if (request !== openFileRequest || project !== state.projectDir) return;
   if (!res.ok) { toast(`Cannot read: ${res.error}`); return; }
   const name = path.split(/[\\/]/).pop();
-  state.openFiles[name] = { path, content: res.content };
-  const existing = state.tabs.findIndex((t) => t.name === name);
-  if (existing >= 0) state.activeTab = existing;
-  else { state.tabs.push({ name, ico: (name.split('.').pop() || 'f').slice(0, 2).toUpperCase() }); state.activeTab = state.tabs.length - 1; }
+  syncEditorDraft();
+  state.editing = false;
+  state.openFiles[path] = { path, content: res.content, savedContent: res.content, truncated: Boolean(res.truncated) };
+  state.tabs.push({ path, name, ico: (name.split('.').pop() || 'f').slice(0, 2).toUpperCase() }); state.activeTab = state.tabs.length - 1;
   switchView('code');
   renderTabs(); renderEditor(); renderSuggestion(null);
+  if (res.truncated) toast('Large file preview is read-only; open it in an external editor to change it.');
 }
 
 function renderSkillsView() {
@@ -923,7 +1043,9 @@ async function renderMissionsView() {
     <div class="alt-sub" style="margin-top:10px;font-weight:600">Journal (on disk — survives restarts)</div><div id="journalList" class="alt-sub">Loading mission journal…</div>
     ${session ? `<div class="alt-sub" style="margin-top:10px;font-weight:600">This session</div>${session}` : ''}`;
   if (!(bridge && state.info && state.info.cli)) { $('journalList').textContent = 'Connect the LehroSol CLI to see the on-disk mission journal.'; return; }
+  const journal = $('journalList');
   const res = await bridge.runJson(['missions', 'list', '--json', '--limit', '15'], 30000);
+  if (state.view !== 'missions' || $('journalList') !== journal) return;
   const rows = res.data && res.data.missions;
   if (!rows || !rows.length) { $('journalList').textContent = 'No missions in the journal yet — run one from the ask bar.'; return; }
   $('journalList').outerHTML = '<div id="journalList">' + rows.map((m) => `
@@ -933,7 +1055,7 @@ async function renderMissionsView() {
   document.querySelectorAll('[data-undo]').forEach((el) => el.addEventListener('click', async () => {
     const undone = await bridge.runJson(['missions', 'undo', '--id', el.dataset.undo, '--json'], 30000);
     toast(undone.data && undone.data.ok ? `\u2713 Undid ${el.dataset.undo} — ${(undone.data.restored || []).length} restored, ${(undone.data.deleted || []).length} removed` : 'Nothing to undo for that mission');
-    renderMissionsView();
+    if (state.view === 'missions') renderMissionsView();
   }));
   document.querySelectorAll('[data-replay-task]').forEach((el) => el.addEventListener('click', () => { switchView('code'); runMission(el.dataset.replayTask); }));
 }
@@ -941,32 +1063,41 @@ async function renderMissionsView() {
 async function renderMemoryView() {
   const alt = $('viewAlt');
   const n = state.snapshot && state.snapshot.engrams;
-  const nLabel = Array.isArray(n) ? n.length : (n ?? '\u2026');
+  const nLabel = esc(Array.isArray(n) ? n.length : (n ?? '\u2026'));
   alt.innerHTML = `<div class="alt-title">Memory (ENGRAM)</div><div class="alt-sub">${nLabel} engrams on disk — recalled automatically at mission start.</div><button class="btn btn-dark" id="btnEngram">Show recent engrams</button><pre id="engramOut" style="font-family:var(--mono);font-size:12px;margin-top:10px;color:var(--dim)"></pre>`;
   $('btnEngram').addEventListener('click', async () => {
+    if (!bridge) { toast('Launch the desktop app to read memory.'); return; }
+    const output = $('engramOut');
     // The CLI command is `engrams` (v3.0+ — `engram list` no longer exists)
     // and now supports --json, so the memory panel consumes real data again.
     const res = bridge.engrams
       ? await bridge.engrams(15)
       : await bridge.runJson(['engrams', '--json'], 30000);
-    $('engramOut').textContent = res.data ? JSON.stringify(res.data, null, 2).slice(0, 4000) : (res.raw || res.error || 'no data');
+    if (state.view !== 'memory' || $('engramOut') !== output) return;
+    output.textContent = res.data ? JSON.stringify(res.data, null, 2).slice(0, 4000) : (res.raw || res.error || 'no data');
   });
 }
 
 function renderSettingsView() {
   const alt = $('viewAlt');
   const cli = state.info && state.info.cli;
-  alt.innerHTML = `<div class="alt-title">Settings</div><div class="alt-sub">Lehrosol Code v${APP_VERSION} · ${cli ? `CLI v${esc((state.info && state.info.cliVersion) || '?')} connected` : 'CLI not connected'}</div>
+  alt.innerHTML = `<div class="alt-title">Settings</div><div class="alt-sub">Lehrosol Code v${esc(APP_VERSION)} · ${cli ? `CLI v${esc((state.info && state.info.cliVersion) || '?')} connected` : 'CLI not connected'}</div>
     <div class="settings-row"><label>LehroSol CLI</label><span class="${cli ? 'green' : ''}" style="font-family:var(--mono);font-size:12px">${cli ? esc(cli) : 'not found'}</span><button class="btn btn-dark" id="btnLocateCli">Locate…</button></div>
     <div class="settings-row"><label>State home</label><span style="font-family:var(--mono);font-size:12px">${esc((state.info && state.info.home) || '~/.lehro')}</span></div>
     <div class="settings-row"><label>RAM</label><span style="font-family:var(--mono);font-size:12px">${esc(String((state.info && state.info.totalGB) || '?'))} GB total</span></div>
     <div class="settings-row"><label>Resource profile</label><select id="setResource"><option value="eco" ${state.resourceProfile === 'eco' ? 'selected' : ''}>Eco</option><option value="balanced" ${state.resourceProfile === 'balanced' ? 'selected' : ''}>Balanced</option><option value="performance" ${state.resourceProfile === 'performance' ? 'selected' : ''}>Performance</option></select><span class="dim">Smart context, threads, and RAM headroom</span></div>
-    <div class="settings-row"><label>Theme</label><select id="setTheme"><option value="dark" ${state.theme === 'dark' ? 'selected' : ''}>Dark</option><option value="light" ${state.theme === 'light' ? 'selected' : ''}>Light</option></select><span class="dim">Applies instantly on save</span></div>
+    <div class="settings-row"><label>Theme</label><select id="setTheme">${workspace.themes.map((theme) => `<option value="${theme}" ${state.theme === theme ? 'selected' : ''}>${theme[0].toUpperCase() + theme.slice(1)}</option>`).join('')}</select><button class="btn btn-dark" id="settingsAppearance">Accent, density &amp; fonts</button></div>
+    <div class="settings-row"><label>Workspace</label><button class="btn btn-dark" id="settingsViews">Views &amp; saved layouts</button><button class="btn btn-dark" id="settingsPreferences">Import / export setup</button></div>
     <div class="settings-row"><label>Default port</label><input id="setPort" value="${attr(state.settings.port)}" /></div>
-    <div class="settings-row"><label>API key</label><input id="setKey" value="${attr(state.settings.apiKey)}" /></div>
+    <div class="settings-row"><label>API key</label><input id="setKey" type="password" value="${attr(state.settings.apiKey)}" /></div>
     <div class="settings-row"><label>Auto-start engine</label><label class="livetoggle"><input type="checkbox" id="setAuto" ${state.settings.autoServe ? 'checked' : ''} /> resume the last served model on launch</label></div>
-    <div class="modal-actions" style="justify-content:flex-start"><button class="btn btn-green" id="btnSaveSettings">Save</button><button class="btn btn-dark" id="btnStopEngine">Stop engine</button></div>`;
+    <div class="modal-actions" style="justify-content:flex-start"><button class="btn btn-green" id="btnSaveSettings">Save</button><button class="btn btn-dark" id="btnStopEngine">Stop engine</button><button class="btn btn-dark" id="btnSettingsUpdate">Check for updates</button></div>`;
+  $('btnSettingsUpdate').addEventListener('click', () => window.lehroUpdates?.check());
+  $('settingsAppearance').addEventListener('click', appearanceDialog);
+  $('settingsViews').addEventListener('click', viewsDialog);
+  $('settingsPreferences').addEventListener('click', preferencesDialog);
   $('btnLocateCli').addEventListener('click', async () => {
+    if (!bridge) { toast('Launch the desktop app to connect the CLI.'); return; }
     const file = await bridge.pickFile();
     if (!file) return;
     const res = await bridge.setCliPath(file);
@@ -984,7 +1115,9 @@ function renderSettingsView() {
     }
   });
   $('btnSaveSettings').addEventListener('click', () => {
-    state.settings.port = $('setPort').value.trim() || '7000';
+    const port = $('setPort').value.trim();
+    if (!validPort(port)) { toast('Port must be a whole number from 1 to 65535.'); return; }
+    state.settings.port = String(Number(port));
     state.settings.apiKey = $('setKey').value.trim() || 'lehro-local';
     state.settings.autoServe = $('setAuto').checked;
     const changedProfile = state.resourceProfile !== $('setResource').value;
@@ -1003,16 +1136,22 @@ function renderSettingsView() {
 }
 
 function renderSearchView() {
+  let searchRequest = 0;
   $('viewAlt').innerHTML = `<div class="alt-title">Search</div><div class="alt-sub">Search the open project.</div><input id="projSearch" style="background:var(--panel2);border:1px solid var(--border);border-radius:7px;padding:8px 12px;width:420px" placeholder="Search text… (Enter)" /><div id="searchResults" style="margin-top:12px"></div>`;
   $('projSearch').addEventListener('keydown', async (e) => {
     if (e.key !== 'Enter') return;
     const q = e.target.value.trim().toLowerCase();
     if (!q) return;
+    if (!bridge) { toast('Launch the desktop app to search files.'); return; }
     if (!state.projectDir) { $('searchResults').innerHTML = '<div class="alt-sub">Open a project first.</div>'; return; }
+    const request = ++searchRequest;
+    const project = state.projectDir;
+    const output = $('searchResults');
+    const stale = () => state.view !== 'search' || state.projectDir !== project || request !== searchRequest || $('searchResults') !== output;
     const hits = [];
     const walk = async (entries) => {
       for (const en of entries) {
-        if (hits.length > 40) return;
+        if (hits.length > 40 || stale()) return;
         if (en.dir) await walk(en.children || []);
         else if (/\.(ts|js|json|md|py|yaml|yml|txt|css|html)$/i.test(en.name)) {
           const res = await bridge.projectRead({ file: en.path });
@@ -1022,9 +1161,11 @@ function renderSearchView() {
     };
     if (!state.tree.length) {
       const tree = await bridge.projectTree({ dir: state.projectDir });
+      if (stale()) return;
       state.tree = Array.isArray(tree) ? tree : [];
     }
     await walk(state.tree);
+    if (stale()) return;
     $('searchResults').innerHTML = hits.length ? hits.map((h) => `<div class="tree-item" data-file="${attr(h.path)}"><span class="dim">${esc(h.path.split(/[\\/]/).pop())}:${h.line}</span> ${esc(h.text)}</div>`).join('') : '<div class="alt-sub">No matches.</div>';
     document.querySelectorAll('#searchResults .tree-item').forEach((el) => el.addEventListener('click', () => openFile(el.dataset.file)));
   });
@@ -1039,7 +1180,7 @@ function renderOnboarding() {
     ${bridge ? `
     <div class="steps">
       <b>${found}</b> GGUF model(s) found on this PC${found ? ' — see the Vault view (\u25a3)' : ''}.<br>
-      <b>1.</b> Install the CLI: <code>cd D:\\lehrosol-cli</code> → <code>npm install -g .</code><br>
+      <b>1.</b> Install the CLI: <code>npm install -g @lehrosolutions/cli@beta</code><br>
       <b>2.</b> Or point me at it: Settings → “Locate…” → pick <code>bin\\lehrosol.js</code><br>
       <b>3.</b> Then serve a model and start your first mission.
     </div>
@@ -1052,39 +1193,46 @@ function renderOnboarding() {
 }
 
 /* ---------------- AI suggestion flow ---------------- */
+let suggestionRequest = 0;
 async function requestSuggestion() {
+  syncEditorDraft();
   const file = currentFile();
   if (!bridge || !(state.info && state.info.cli)) { toast('Connect the LehroSol CLI first'); return; }
   if (!file) { toast('Open a file first (Files view)'); return; }
+  if (file.truncated) { toast('Large file preview is read-only; AI rewrite is disabled.'); return; }
   if (!engineUp()) { toast('Engine offline — serve a model first'); return; }
+  const originalContent = file.content;
+  const originalPath = file.path;
+  const request = ++suggestionRequest;
   toast('Asking your local model for an improvement…');
   // Context-aware plan (bridge computes it in the testable layer): local
   // engines reserve max_tokens inside the context window, so the old flat
   // 2048-token ask overflowed the very 2K-context servers the CLI clamps to.
   const plan = bridge.suggestionPlan
-    ? await bridge.suggestionPlan({ resourceProfile: state.resourceProfile, fileChars: file.content.length, reasoning: state.reasoning })
-    : { charBudget: 6000, maxTokens: 1024, truncated: file.content.length > 6000, system: undefined, temperature: 0.2 };
-  const buildPrompt = (chars) => {
-    const notice = file.content.length > chars
-      ? `\n\n[NOTE: file truncated for context — ${file.content.length - chars} chars not shown]`
-      : '';
-    return `Improve this file. Reply with ONLY a fenced code block containing the full improved file, no commentary. File ${file.path}:${notice}\n\n${file.content.slice(0, chars)}`;
+    ? await bridge.suggestionPlan({ resourceProfile: state.resourceProfile, fileChars: originalContent.length, reasoning: state.reasoning })
+    : { charBudget: 6000, maxTokens: 1024, truncated: originalContent.length > 6000, system: undefined, temperature: 0.2 };
+  if (plan.truncated || originalContent.length > plan.charBudget) {
+    toast('This file exceeds the safe AI rewrite context. Use a mission for a targeted edit.');
+    return;
+  }
+  const buildPrompt = () => {
+    return `Improve this file. Reply with ONLY a fenced code block containing the full improved file, no commentary. File ${originalPath}:\n\n${originalContent}`;
   };
   // Ask the hot engine directly - `loop run` is a scoring harness and never
   // returns model text, so suggestions could not work through it.
-  let res = await bridge.chat({ port: enginePort(), apiKey: state.settings.apiKey, prompt: buildPrompt(plan.charBudget), system: plan.system, maxTokens: plan.maxTokens, temperature: plan.temperature });
-  // Same overflow self-healing the CLI code lane does: shrink the window and
-  // retry once instead of surfacing a bare HTTP 500.
-  if (!res.ok && /context|exceed|500/i.test(String(res.error || ''))) {
-    logEvent('suggestion: context overflow — shrinking window and retrying');
-    toast('Context overflow — shrinking the file window and retrying…');
-    res = await bridge.chat({ port: enginePort(), apiKey: state.settings.apiKey, prompt: buildPrompt(Math.floor(plan.charBudget / 2)), system: plan.system, maxTokens: Math.min(512, plan.maxTokens), temperature: plan.temperature });
+  const res = await bridge.chat({ port: enginePort(), apiKey: state.settings.apiKey, model: servedModel(), source: 'desktop-suggestion', prompt: buildPrompt(), system: plan.system, maxTokens: plan.maxTokens, temperature: plan.temperature });
+  refreshMetrics();
+  syncEditorDraft();
+  if (request !== suggestionRequest || currentFile() !== file || file.path !== originalPath || file.content !== originalContent) {
+    toast('The file changed while AI was working. Request a fresh suggestion.'); return;
   }
+  if (!res.ok) { toast(`Suggestion failed: ${res.error || 'engine unavailable'}`); return; }
+  if (res.finishReason === 'length') { toast('AI output was cut short. Nothing was applied; use a targeted mission.'); return; }
   const textOut = (res.ok && res.text) || res.error || '';
   const match = textOut.match(/```[a-z]*\n([\s\S]*?)```/);
   if (!match) { appendPane('outputOut', `\nAI suggestion raw output:\n${textOut.slice(0, 2000)}\n`); toast('No code block returned — raw output in OUTPUT pane'); return; }
   const improved = match[1].replace(/\n$/, '');
-  const oldLines = file.content.split('\n');
+  const oldLines = originalContent.split('\n');
   const newLines = improved.split('\n');
   let a = 0;
   while (a < oldLines.length && a < newLines.length && oldLines[a] === newLines[a]) a += 1;
@@ -1092,19 +1240,27 @@ async function requestSuggestion() {
   while (bo > a && bn > a && oldLines[bo] === newLines[bn]) { bo -= 1; bn -= 1; }
   renderSuggestion({
     range: `line ${a + 1}-${bo + 1}`,
-    tag: plan.truncated ? '\u26a1 AI Rewrite (truncated context — verify the tail before applying)' : '\u26a1 AI Rewrite',
-    minus: oldLines.slice(a, bo + 1).slice(0, 8),
-    plus: newLines.slice(a, bn + 1).slice(0, 10),
+    tag: '\u26a1 AI Rewrite',
+    minus: oldLines.slice(a, bo + 1),
+    plus: newLines.slice(a, bn + 1),
     fullNew: improved,
+    path: originalPath,
+    originalContent,
   });
 }
 async function applySuggestion() {
+  syncEditorDraft();
   const sug = state.suggestion;
   const file = currentFile();
   if (!sug || !file || !sug.fullNew) { renderSuggestion(null); return; }
-  const res = await bridge.projectWrite({ file: file.path, content: sug.fullNew });
+  if (file.truncated || file.path !== sug.path || file.content !== sug.originalContent) {
+    toast('Suggestion is stale. Request a fresh suggestion for this file.'); return;
+  }
+  const res = await bridge.projectWrite({ file: file.path, content: sug.fullNew, expectedContent: file.savedContent });
   if (!res.ok) { toast(`Write failed: ${res.error}`); return; }
-  file.content = sug.fullNew;
+  syncEditorDraft();
+  if (file.content === sug.originalContent) file.content = sug.fullNew;
+  file.savedContent = sug.fullNew;
   renderEditor();
   timelinePush(`apply \u2192 ${file.path.split(/[\\/]/).pop()}`, 'saved', true);
   toast('\u2713 Applied and saved');
@@ -1122,6 +1278,15 @@ function openDiffView() {
 
 /* ---------------- command palette ---------------- */
 const COMMANDS = [
+  { name: 'Output Workspace', hint: 'Ctrl Shift O', run: () => switchView('output') },
+  { name: 'Model Usage and Context Windows', hint: 'Ctrl Shift U', run: () => { switchView('usage'); refreshMetrics(); } },
+  { name: 'Engine Controls', hint: 'view', run: () => switchView('engine') },
+  { name: 'Customize Views and Layout', hint: 'workspace', run: viewsDialog },
+  { name: 'Customize Theme, Accent, and Fonts', hint: 'appearance', run: appearanceDialog },
+  { name: 'Minimal Workspace', hint: 'Ctrl Shift F', run: () => choosePreset('minimal') },
+  { name: 'Code Workspace with Split Output', hint: 'layout', run: () => choosePreset('code') },
+  { name: 'Create Workspace', hint: 'layout', run: () => choosePreset('create') },
+  { name: 'Debug Workspace', hint: 'layout', run: () => choosePreset('debug') },
   { name: 'Serve a Model (New Agent)', hint: 'vault serve', run: () => newAgentModal() },
   { name: 'Quick Start — best model', hint: 'auto serve', run: quickStart },
   { name: 'Model Test Bench', hint: 'benchmark', run: () => switchView('bench') },
@@ -1130,7 +1295,7 @@ const COMMANDS = [
   { name: 'Open Project Folder', hint: 'files', run: pickProject },
   { name: 'Stop Engine', hint: 'serve stop', run: stopEngine },
   { name: 'Ping Engine', hint: 'health', run: pingNow },
-  { name: 'Run Mission…', hint: 'loop run', run: () => { closePalette(); $('askInput').focus(); } },
+  { name: 'Run Mission…', hint: 'code', run: () => { closePalette(); $('askInput').focus(); } },
   { name: 'Toggle Terminal', hint: 'panel', run: () => setBottomCollapsed(!$('bottomPanel').classList.contains('collapsed')) },
   { name: 'Mission History', hint: 'journal', run: () => switchView('missions') },
   { name: 'Undo Last Mission', hint: 'rollback', run: undoLastMission },
@@ -1160,6 +1325,7 @@ function runCommand(name) {
 
 /* ---------------- new agent modal ---------------- */
 async function newAgentModal() {
+  if (!bridge || !(state.info && state.info.cli)) { toast('Connect the LehroSol CLI first (Settings).'); switchView('settings'); return; }
   if (!state.models.length) await loadModels();
   const options = state.models.map((m) => `<option>${esc(m.id)}</option>`).join('') || '<option>no models found</option>';
   openModal(`<h3>Serve a local model</h3>
@@ -1168,7 +1334,10 @@ async function newAgentModal() {
     <div class="modal-actions"><button class="btn btn-dark" id="naCancel">Cancel</button><button class="btn btn-green" id="naGo">Serve &amp; wire agents</button></div>`);
   $('naCancel').addEventListener('click', closeModal);
   $('naGo').addEventListener('click', () => {
-    state.settings.port = $('naPort').value.trim() || state.settings.port;
+    const port = $('naPort').value.trim();
+    if (!validPort(port)) { toast('Port must be a whole number from 1 to 65535.'); return; }
+    if (!state.models.length) { toast('Scan the Vault for a model first.'); return; }
+    state.settings.port = String(Number(port));
     closeModal();
     serveModel($('naModel').value);
   });
@@ -1181,6 +1350,8 @@ function setBottomCollapsed(collapsed) {
   $('bottomPanel').classList.toggle('collapsed', collapsed);
   const handle = $('resizeBottom');
   if (handle) handle.classList.toggle('hidden', collapsed);
+  layout.bottom = !collapsed;
+  localStorage.setItem('lc.workspace', JSON.stringify(layout));
 }
 
 function switchBottomTab(name) {
@@ -1193,7 +1364,7 @@ function initMissionControls() {
   const live = $('missionLive');
   const run = $('missionRun');
   const context = $('missionContext');
-  live.checked = localStorage.getItem('lc.missionLive') !== '0';
+  live.checked = localStorage.getItem('lc.missionLive') === '1';
   run.checked = localStorage.getItem('lc.missionRun') === '1';
   context.value = localStorage.getItem('lc.contextMode') || 'normal';
   live.addEventListener('change', () => localStorage.setItem('lc.missionLive', live.checked ? '1' : '0'));
@@ -1230,6 +1401,7 @@ function initResizablePanels() {
 }
 
 function wire() {
+  initWorkbench();
   initMissionControls();
   initResizablePanels();
   document.querySelectorAll('.rail-btn[data-view]').forEach((b) => b.addEventListener('click', () => switchView(b.dataset.view)));
@@ -1250,8 +1422,8 @@ function wire() {
   $('btnViewAllAgents').addEventListener('click', () => switchView('vault'));
 
   $('projectPill').addEventListener('click', pickProject);
-  $('enginePill').addEventListener('click', () => switchView('bench'));
-  $('agentsPill').addEventListener('click', () => { if (engineUp()) switchView('bench'); else quickStart(); });
+  $('enginePill').addEventListener('click', () => switchView('engine'));
+  $('agentsPill').addEventListener('click', () => { if (engineUp()) switchView('engine'); else quickStart(); });
   $('btnTermToggle').addEventListener('click', () => { setBottomCollapsed(false); switchBottomTab('terminal'); });
   $('btnBell').addEventListener('click', () => {
     $('bellBadge').classList.add('hidden');
@@ -1259,8 +1431,14 @@ function wire() {
     $('nClose').addEventListener('click', closeModal);
   });
   const about = () => {
-    openModal(`<h3>Lehrosol Code</h3><div class="alt-sub">v${APP_VERSION} — the agentic engineering IDE for local models.${state.info && state.info.cliVersion ? ` Paired with the LehroSol CLI v${esc(state.info.cliVersion)}.` : ''}<br><br>A cockpit over the LehroSol CLI: zero-setup model discovery, one-click engines (up), arena model racing, HELIX missions, a model test bench, ENGRAM memory, and a live system graph. Everything runs on GGUFs from your own drive — no cloud.</div><div class="modal-actions"><button class="btn btn-green" id="aClose">Close</button></div>`);
+    openModal(`<h3>Lehrosol Code</h3><div class="alt-sub">v${esc(APP_VERSION)} — the agentic engineering IDE for local models.${state.info && state.info.cliVersion ? ` Paired with the LehroSol CLI v${esc(state.info.cliVersion)}.` : ''}<br><br>A cockpit over the LehroSol CLI: zero-setup model discovery, one-click engines (up), arena model racing, HELIX missions, a model test bench, ENGRAM memory, and a live system graph. Models run on your own drive. Update checks contact GitHub only when requested.</div><div class="modal-actions"><button class="btn btn-dark" id="btnAboutUpdate">Check for updates</button><button class="btn btn-green" id="aClose">Close</button></div>`);
     $('aClose').addEventListener('click', closeModal);
+    $('btnAboutUpdate').addEventListener('click', () => window.lehroUpdates?.check());
+    const actions = $('modalBox').querySelector('.modal-actions');
+    const help = document.createElement('button');
+    help.className = 'btn btn-dark'; help.textContent = 'Open help'; help.id = 'btnOpenHelp';
+    help.addEventListener('click', async () => { const result = await bridge?.openHelp?.(); if (!result?.ok) toast(result?.error || 'Help requires the desktop app'); });
+    actions.prepend(help);
   };
   $('btnHelp').addEventListener('click', about);
   $('btnAvatar').addEventListener('click', about);
@@ -1303,12 +1481,15 @@ function wire() {
   $('btnEditToggle').addEventListener('click', () => {
     const file = currentFile();
     if (!file) { toast('Open a real file to edit'); return; }
+    if (file.truncated) { toast('Large file preview is read-only.'); return; }
+    syncEditorDraft();
     state.editing = !state.editing;
     $('editorTextarea').classList.toggle('hidden', !state.editing);
     $('editorPre').classList.toggle('hidden', state.editing);
     if (state.editing) { $('editorTextarea').value = file.content; $('editorTextarea').focus(); }
-    else { file.content = $('editorTextarea').value; renderEditor(); }
+    else { renderEditor(); renderTabs(); }
   });
+  $('editorTextarea').addEventListener('input', () => { syncEditorDraft(); renderTabs(); });
   $('btnSaveFile').addEventListener('click', saveCurrentFile);
 
   $('btnGraphLive').addEventListener('click', () => {
@@ -1330,13 +1511,20 @@ function wire() {
     if (e.key === 'Escape') { closePalette(); closeModal(); }
   });
   window.addEventListener('resize', () => { if (lastGraphData) renderGraph(lastGraphData); }, { passive: true });
+  window.addEventListener('beforeunload', (event) => {
+    if (hasUnsavedChanges()) { event.preventDefault(); event.returnValue = ''; }
+  });
 }
 
 async function saveCurrentFile() {
+  syncEditorDraft();
   const file = currentFile();
   if (!file || !bridge) return;
-  if (state.editing) file.content = $('editorTextarea').value;
-  const res = await bridge.projectWrite({ file: file.path, content: file.content });
+  if (file.truncated) { toast('Large file preview is read-only.'); return; }
+  const content = file.content;
+  const res = await bridge.projectWrite({ file: file.path, content, expectedContent: file.savedContent });
+  if (res.ok) file.savedContent = content;
+  renderTabs();
   toast(res.ok ? `\u2713 Saved ${file.path.split(/[\\/]/).pop()}` : `Save failed: ${res.error}`);
 }
 
@@ -1350,6 +1538,8 @@ async function boot() {
   // Re-apply a previously located CLI path before probing.
   if (state.settings.cliPath) await bridge.setCliPath(state.settings.cliPath);
   state.info = await bridge.info();
+  APP_VERSION = state.info.appVersion || 'unknown';
+  setInterval(() => { if (state.polling) refreshLive(); }, 5000);
 
   // Zero-setup discovery runs regardless of the CLI.
   await loadModels();
@@ -1382,7 +1572,6 @@ async function boot() {
     }
   }
 
-  setInterval(() => { if (state.polling) refreshLive(); }, 5000);
 }
 
-boot();
+boot().catch((err) => { toast(`Startup failed: ${err.message}`); logEvent(`startup failed: ${err.message}`); });

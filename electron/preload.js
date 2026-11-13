@@ -4,12 +4,17 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('lehro', {
+  checkUpdates: () => ipcRenderer.invoke('app:checkUpdates'),
+  openRelease: (url) => ipcRenderer.invoke('app:openRelease', url),
+  openHelp: () => ipcRenderer.invoke('app:openHelp'),
   info: () => ipcRenderer.invoke('lehro:info'),
   runJson: (args, timeoutMs) => ipcRenderer.invoke('lehro:runJson', { args, timeoutMs }),
   snapshot: () => ipcRenderer.invoke('lehro:snapshot'),
   vault: () => ipcRenderer.invoke('lehro:vault'),
   addRoot: (dir) => ipcRenderer.invoke('lehro:addRoot', { dir }),
   serveState: () => ipcRenderer.invoke('lehro:serveState'),
+  usage: (days) => ipcRenderer.invoke('lehro:usage', { days }),
+  engineDetails: (opts) => ipcRenderer.invoke('lehro:engineDetails', opts),
   ping: (opts) => ipcRenderer.invoke('lehro:ping', opts),
   nativeScan: (opts) => ipcRenderer.invoke('lehro:nativeScan', opts || {}),
   chat: (opts) => ipcRenderer.invoke('lehro:chat', opts),

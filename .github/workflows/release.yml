@@ -22,7 +22,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           # electron-builder resolves the version from package.json and needs the
           # full history to derive a changelog/version string.
@@ -36,12 +36,12 @@ jobs:
           if ($env:GITHUB_REF_NAME -ne "v$version") { throw 'Git tag must match package.json version' }
 
       - name: Install pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@v6
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
-          # 22.13 is the real floor, not 22.12: Electron 44 tooling wants
+          # 22.13 is the real floor, not 22.12: Electron tooling wants
           # >= 22.12.0, but pnpm 11.15.1 refuses to run below Node 22.13
           # ("ERROR: This version of pnpm requires at least Node.js v22.13"),
           # which fails the `cache: pnpm` step before install even starts.
@@ -51,8 +51,17 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Audit release-tool dependencies
+        run: pnpm audit --audit-level high
+
       - name: Test
         run: pnpm test
+
+      - name: Check syntax, metadata, and docs
+        run: pnpm check
+
+      - name: Exercise source application
+        run: pnpm smoke
 
       # ---------------------------------------------------------------------------
       # CODE SIGNING IS NOT CONFIGURED. The installer produced below is UNSIGNED.
@@ -89,59 +98,49 @@ jobs:
       - name: List build output
         run: Get-ChildItem -Path dist -File | Select-Object Name, Length
 
-      - name: Generate installer checksums
-        shell: pwsh
-        run: |
-          $installers = @(Get-ChildItem -Path dist -Filter *.exe -File)
-          if ($installers.Count -eq 0) { throw 'No Windows installer was produced' }
-          foreach ($installer in $installers) {
-            $releaseName = $installer.Name -replace '\s+', '.'
-            if ($releaseName -ne $installer.Name) {
-              $releasePath = Join-Path $installer.DirectoryName $releaseName
-              if (Test-Path -LiteralPath $releasePath) { throw 'Installer asset name collision' }
-              Rename-Item -LiteralPath $installer.FullName -NewName $releaseName
-            }
-          }
-          $installers = @(Get-ChildItem -Path dist -Filter *.exe -File)
-          $checksums = $installers | ForEach-Object {
-            $hash = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
-            "$hash  $($_.Name)"
-          }
-          $checksums | Set-Content -LiteralPath dist/SHA256SUMS -Encoding utf8NoBOM
+      - name: Exercise packaged application
+        run: pnpm smoke --packaged
 
-      - uses: actions/upload-artifact@v4
+      - name: Verify isolated Windows install and upgrade
+        run: pnpm verify:installation
+
+      - name: Verify package contents and prepare release assets
+        run: pnpm release:prepare
+
+      - name: Retain release QA diagnostics
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: windows-release-qa
+          path: |
+            dist/qa/
+            !dist/qa/installation-old/**
+            !dist/qa/installation-new/**
+          if-no-files-found: warn
+
+      - uses: actions/upload-artifact@v7
         with:
           name: windows-installer
           path: |
-            dist/*.exe
+            dist/Lehrosol.Code.Setup.*.exe
             dist/SHA256SUMS
+            dist/release.json
+            dist/RELEASE-NOTES.md
+            dist/qa/
+            !dist/qa/installation-old/**
+            !dist/qa/installation-new/**
           if-no-files-found: error
 
       - name: Publish release
         if: startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           name: Lehrosol Code ${{ github.ref_name }}
-          # dist/ holds the NSIS installer, the blockmap, and the auto-update
-          # metadata written by electron-builder. Paths are relative to the
-          # repository root.
           files: |
-            dist/*.exe
+            dist/Lehrosol.Code.Setup.*.exe
             dist/SHA256SUMS
+            dist/release.json
           fail_on_unmatched_files: true
           draft: true
           make_latest: false
-          generate_release_notes: true
-          body: |
-            ## Code signing status
-
-            Installers are unsigned unless signing credentials were configured
-            for this build. Check the executable's Authenticode signature before
-            describing the release as signed. SHA256SUMS verifies download integrity.
-
-            ## Before publishing this draft
-
-            - Verify the downloaded installer's SHA-256 against SHA256SUMS.
-            - Install and launch on Windows 10/11 x64 in a disposable environment.
-            - Pair with `npm install -g @lehrosolutions/cli@beta` and verify CLI discovery.
-            - Open a project and complete an engine-start and dry-run mission check.
+          body_path: dist/RELEASE-NOTES.md

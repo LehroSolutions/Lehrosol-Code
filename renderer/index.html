@@ -19,6 +19,7 @@
       <button class="pill pill-live" id="agentsPill"><span class="dot dot-gray"></span><span id="agentsPillText">Engine</span><span class="count" id="agentsPillCount">…</span></button>
     </div>
     <div class="tb-right">
+      <button class="btn-ghost" id="btnUpdate" title="Check for updates and latest changes">Update</button>
       <button class="iconbtn" id="btnTermToggle" title="Toggle terminal">&#x232A;_</button>
       <button class="iconbtn" id="btnBell" title="Notifications">⬤<span class="bell-badge hidden" id="bellBadge"></span></button>
       <button class="iconbtn" id="btnHelp" title="About">?</button>
@@ -27,7 +28,8 @@
   </header>
 
   <div id="main">
-    <nav id="rail">
+    <nav id="rail" aria-label="Pinned workspace views">
+      <button class="rail-btn" data-view="output" title="Output workspace" aria-label="Output workspace">▤</button>
       <button class="rail-btn active" data-view="code" title="Editor">⚡</button>
       <button class="rail-btn" data-view="files" title="Files">⧉</button>
       <button class="rail-btn" data-view="search" title="Search">⌕</button>
@@ -36,6 +38,8 @@
       <button class="rail-btn" data-view="skills" title="Skills">⚙︎</button>
       <button class="rail-btn" data-view="missions" title="Missions">▸</button>
       <button class="rail-btn" data-view="memory" title="Memory">▤</button>
+      <button class="rail-btn" data-view="engine" title="Engine" aria-label="Engine">◈</button>
+      <button class="rail-btn" data-view="usage" title="Model usage" aria-label="Model usage">◴</button>
       <button class="rail-btn" data-view="settings" title="Settings">⚙</button>
       <div class="rail-spacer"></div>
       <button class="rail-btn" id="railNewAgent" title="Serve a model">+</button>
@@ -58,6 +62,11 @@
     <div class="resize-handle resize-x" id="resizeLeft" title="Drag to resize Agent Stream"></div>
 
     <section id="center">
+      <div id="workspaceBar" aria-label="Workspace layout">
+        <button id="btnWorkspaceOutput" aria-pressed="false">Output</button><button id="btnWorkspaceEditor" aria-pressed="false">Editor</button><button id="btnSplitOutput" aria-pressed="false" title="Display output beside the editor">Split</button><span class="flex1"></span>
+        <label class="sr-only" for="workspacePreset">Workspace preset</label><select id="workspacePreset"><option value="create">Create</option><option value="code">Code</option><option value="debug">Debug</option><option value="minimal">Minimal</option><option value="custom" disabled>Custom</option></select><button id="btnViews">Views &amp; layout</button>
+      </div>
+      <div id="mainViews">
       <div id="viewCode" class="center-view">
         <div id="tabsBar"></div>
         <div id="crumbBar">
@@ -95,6 +104,13 @@
         </div>
       </div>
       <div id="viewAlt" class="center-view hidden"></div>
+      <section id="viewOutput" class="center-view hidden" aria-label="Mission output">
+        <div class="output-head"><div><span class="eyebrow">MISSION OUTPUT</span><h1 id="outputTitle">Make room for your next idea.</h1><p id="outputMeta"></p></div><label class="sr-only" for="outputRun">Select mission</label><select id="outputRun"><option>No missions yet</option></select></div>
+        <div id="outputToolbar"><div class="output-modes" aria-label="Output format"><button data-output-mode="answer" aria-pressed="true">Answer</button><button data-output-mode="activity" aria-pressed="false">Activity</button><button data-output-mode="raw" aria-pressed="false">Raw</button><button data-output-mode="inspect" aria-pressed="false">Inspector</button></div><div class="output-tools"><input id="outputSearch" type="search" placeholder="Find in output…" aria-label="Find in mission output"><select id="outputFilter" aria-label="Filter mission activity"><option value="all">All activity</option><option value="tools">Tools only</option><option value="errors">Errors only</option></select><label><input type="checkbox" id="outputFollow" checked> Follow</label></div></div>
+        <div id="outputBody" tabindex="0" aria-label="Mission answer and activity"></div><div id="outputFiles" aria-label="Changed files"></div>
+        <div class="output-actions"><button class="btn btn-dark" id="outputCopy" disabled>Copy answer</button><button class="btn btn-dark" id="outputReport" disabled>Copy report</button><span class="flex1"></span><button class="btn btn-dark" id="outputRetry" disabled>Retry goal</button><button class="btn btn-dark" id="outputCancel" disabled>Cancel</button></div>
+      </section>
+      </div>
       <div class="resize-handle resize-y" id="resizeBottom" title="Drag to resize bottom panel"></div>
       <div id="bottomPanel">
         <div id="bottomTabs">
@@ -103,18 +119,19 @@
           <button class="btab" data-btab="output">OUTPUT</button>
           <button class="btab" data-btab="debug">ENGINE LOG</button>
           <span class="flex1"></span>
-          <label class="livetoggle" title="When enabled, the agent may create and edit files in the open project"><input type="checkbox" id="missionLive" checked /> live writes</label>
-          <label class="livetoggle" title="When enabled, the agent may run shell commands in the open project"><input type="checkbox" id="missionRun" /> commands</label>
-          <select id="missionContext" title="Controls how much project context each model request receives"><option value="compact">Compact context</option><option value="normal" selected>Normal context</option><option value="expanded">Expanded context</option></select>
+          <button class="btn-ghost" id="btnOutputExpand" title="Open full-size output">Expand output ↗</button>
         </div>
         <div class="bpane" id="paneTerminal"><pre id="termOut"></pre><div class="term-line"><span id="termPrompt" class="green">›</span><input id="termInput" spellcheck="false" autocomplete="off" /></div></div>
         <div class="bpane hidden" id="paneProblems"><pre id="problemsOut"></pre></div>
         <div class="bpane hidden" id="paneOutput"><pre id="outputOut"></pre></div>
         <div class="bpane hidden" id="paneDebug"><pre id="debugOut"></pre></div>
+      </div>
+      <div id="missionComposer">
+        <div class="composer-controls"><span class="composer-label">BUILD WITH LEHROSOL</span><span class="flex1"></span><label class="livetoggle" title="Allow the agent to create and edit project files"><input type="checkbox" id="missionLive" /> Live writes</label><label class="livetoggle" title="Allow the agent to run commands in the project"><input type="checkbox" id="missionRun" /> Commands</label><select id="missionContext" aria-label="Mission context mode"><option value="compact">Compact context</option><option value="normal" selected>Normal context</option><option value="expanded">Expanded context</option></select></div>
         <div id="askSkills" class="hidden"></div>
         <div id="askBar">
-          <input id="askInput" placeholder="Ask Lehrosol Code anything — the code agent works your open project on your local model  (⌘ / to focus)" />
-          <button id="btnAsk" class="btn btn-green">→</button>
+          <input id="askInput" aria-label="Mission goal" placeholder="Describe what you want to build, fix, or explore…  (Ctrl / to focus)" />
+          <button id="btnAsk" class="btn btn-green" aria-label="Start mission">→</button>
         </div>
       </div>
     </section>
@@ -145,10 +162,14 @@
     </aside>
   </div>
 
+  <footer id="workspaceFooter" aria-label="Engine, missions, and model usage"><button id="footerEngine">○ Engine offline</button><button id="footerMission">Missions ready</button><button id="footerUsage" aria-label="Inspect usage and context windows by model"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 20V13M10 20V8M16 20V4M22 20H2"/></svg><span id="footerUsageText">0 tok</span></button><span class="flex1"></span><button id="footerLayout">Create</button><button id="footerTheme">Appearance</button></footer>
   <div id="palette" class="overlay hidden"><div class="palette-box"><input id="paletteInput" placeholder="Type a command or file name…" /><div id="paletteList"></div></div></div>
   <div id="modal" class="overlay hidden"><div class="modal-box" id="modalBox"></div></div>
   <div id="toast" class="hidden"></div>
 
+  <script src="workspace.js"></script>
+  <script src="workbench.js"></script>
   <script src="app.js"></script>
+  <script src="updates.js"></script>
 </body>
 </html>

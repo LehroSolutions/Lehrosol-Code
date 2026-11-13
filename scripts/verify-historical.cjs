@@ -22,14 +22,15 @@ assert.equal(sha256(fs.readFileSync(latest)), manifest.sha256);
 const oldName = 'Lehrosol.Code.Setup.2.4.1.exe';
 const old = path.join(historical, oldName);
 const checksums = fs.readFileSync(path.join(historical, 'SHA256SUMS'), 'utf8').replace(/^\uFEFF/, '');
-const oldHash = checksums.split(/\r?\n/).map((line) => /^([a-fA-F0-9]{64})\s+\*?(.+)$/.exec(line)).find((match) => match?.[2] === oldName)?.[1];
+const oldEntry = checksums.split(/\r?\n/).map((line) => /^([a-fA-F0-9]{64})\s+\*?(.+)$/.exec(line)).find((match) => [oldName, 'Lehrosol Code Setup 2.4.1.exe'].includes(match?.[2]));
+const oldHash = oldEntry?.[1];
 assert.equal(sha256(fs.readFileSync(old)), oldHash?.toLowerCase(), 'Historical installer checksum mismatch');
 const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'lehrosol-historical-'));
 const install = path.join(temp, 'application with spaces');
 const executable = path.join(install, 'Lehrosol Code.exe');
 const profile = path.join(temp, 'profile');
 const home = path.join(temp, 'home');
-const evidence = { ok: false, version: manifest.version, sourceRevision: manifest.source.revision, installerSha256: manifest.sha256, historicalVersion: '2.4.1', historicalInstallerSha256: oldHash, at: new Date().toISOString(), checks: [] };
+const evidence = { ok: false, version: manifest.version, sourceRevision: manifest.source.revision, installerSha256: manifest.sha256, historicalVersion: '2.4.1', historicalInstallerSha256: oldHash, historicalChecksumFilename: oldEntry[2], at: new Date().toISOString(), checks: [] };
 
 function run(file, args, name, timeout = 120000) {
   const result = spawnSync(file, args, { cwd: root, windowsHide: true, encoding: 'utf8', timeout });

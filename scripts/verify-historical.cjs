@@ -38,7 +38,17 @@ function run(file, args, name, timeout = 120000) {
   if (result.error || result.status !== 0) throw new Error(`${name} failed: ${result.error?.message || result.stderr || result.status}`);
 }
 function packageVersion() {
-  return JSON.parse(asar.extractFile(path.join(install, 'resources', 'app.asar'), 'package.json').toString('utf8')).version;
+  const archive = path.join(install, 'resources', 'app.asar');
+  asar.uncache(archive);
+  return JSON.parse(asar.extractFile(archive, 'package.json').toString('utf8')).version;
+}
+async function waitForUninstall() {
+  const deadline = Date.now() + 60000;
+  while (Date.now() < deadline) {
+    if ((await detectInstallation()).state === 'portable' && !fs.existsSync(executable)) return;
+    await new Promise(resolve => setTimeout(resolve, 250));
+  }
+  throw new Error('Uninstaller did not remove application and registration within 60 seconds');
 }
 async function ownRegistration(version) {
   const state = await detectInstallation();
@@ -78,7 +88,7 @@ async function ownRegistration(version) {
         await ownRegistration();
         assert.ok(path.resolve(install).startsWith(path.resolve(temp) + path.sep));
         run(path.join(install, 'Uninstall Lehrosol Code.exe'), ['/S', '/currentuser'], 'uninstall-candidate');
-        assert.equal((await detectInstallation()).state, 'portable');
+        await waitForUninstall();
         evidence.checks.push('Uninstall test application and remove original-identity registration');
       }
       evidence.ok = !evidence.error;

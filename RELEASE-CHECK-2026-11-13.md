@@ -2,6 +2,8 @@
 
 This records the initial release review. The follow-up audit is tracked in
 [RELEASE-AUDIT-2026-11-13.md](RELEASE-AUDIT-2026-11-13.md).
+The initial local packaged-startup finding below has been superseded by clean
+runner evidence and the host-containment investigation in that follow-up.
 
 **Verdict: HOLD public release of v2.4.2.** Source-mode success does not establish
 that the Windows application is usable after packaging. The normal packaged

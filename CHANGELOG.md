@@ -79,10 +79,14 @@ installer was publicly distributed for every version.
   remote analytics, or automatic restart is added.
 - Include the pending GitHub Actions dependency updates in candidate workflows.
 
+### Supported platform
+- Maintain and test the desktop on Windows 11 x64. Windows 10 is outside the
+  release's supported platform scope.
+
 ### Validation boundary
 - Source tests and synthetic-engine smoke checks establish their covered
   contracts, not local model quality or real GGUF engine startup acceptance.
-- Record final test/smoke/artifact evidence with the candidate. Windows 10
+- Record final test/smoke/artifact evidence with the candidate. Windows 11
   installation, upgrade behavior, real-model pairing, and signing must be
   evaluated before a draft is promoted. A local build is not publication.
 

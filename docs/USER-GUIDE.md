@@ -6,7 +6,7 @@ additional workflow detail.
 
 ## Install and find the CLI
 
-Use the Windows x64 installer from a published
+Lehrosol Code supports Windows 11 x64. Use its installer from a published
 [official release](https://github.com/LehroSolutions/Lehrosol-Code/releases).
 Check `SHA256SUMS` before running it. Unsigned builds can trigger Windows
 SmartScreen. Install the paired CLI with Node.js and npm:

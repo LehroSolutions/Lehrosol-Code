@@ -5,6 +5,13 @@ The desktop ships as a Windows x64 NSIS installer through
 `package.json` is private to prevent accidental npm publication. The paired
 `@lehrosolutions/cli` package belongs to the sibling CLI repository.
 
+Current startup release policy (13 November 2026): distribute an explicitly
+**unsigned** installer. Paid signing is deferred until a suitable free option
+is available. `NotSigned` is an accepted release status, not a blocker; failed
+runtime, installation, integrity or update checks remain blockers. Keep the
+unsigned disclosure and SHA256SUMS with each installer. This decision does not
+waive the Windows 11 acceptance checks below.
+
 ## Prepare a candidate
 
 Use Node.js 22.13.0+ and pnpm 11.15.1:
@@ -73,8 +80,12 @@ CI; a dirty local candidate is review evidence rather than a published release.
 
 ## Installation and workflow acceptance
 
-Before promoting a draft, complete these checks in disposable Windows 10 and
-Windows 11 x64 environments:
+Windows 11 x64 is the maintained desktop platform. Before promoting a draft,
+complete these checks in a clean Windows 11 x64 environment. Use an existing
+test machine or an external disposable environment for installation lifecycle
+checks; a storage-constrained development laptop does not need local OS images
+or VMs. Routine source and packaged workflows can run on the development
+laptop, while hosted Windows CI covers build and installer regressions.
 
 1. Download the candidate installer and `SHA256SUMS`; compare the installer hash
    with its exact filename entry using `Get-FileHash -Algorithm SHA256`.
@@ -98,9 +109,11 @@ Windows 11 x64 environments:
    and update statuses: newer release, current release, no public release,
    offline/rate limiting, missing assets, and invalid metadata.
 
-Automated local Windows 11 results do not establish Windows 10 installation
-acceptance. Record incomplete checks explicitly; a successful build is not a
-completed release review.
+Record the tested Windows 11 build and installation scope. Hosted Windows Server
+results and portable application workflows each cover their recorded behavior;
+retain a separate Windows 11 installed-application acceptance record. Windows 10
+is outside the maintained support matrix. Record incomplete checks explicitly;
+a successful build is not a completed release review.
 
 ## GitHub workflow and publication
 
@@ -160,3 +173,14 @@ and logs are retained in `dist/qa/installation/`. The old fixture uses current
 source with older version metadata; also review a historical installer upgrade
 in a disposable environment before public promotion. The release workflow runs
 this gate and audits the complete build-tool dependency tree.
+
+To verify an exact historical binary, dispatch the Release workflow on the
+candidate branch with `candidate_run_id` set to a successful Release run ID.
+This runs the historical-upgrade workflow on a disposable Windows Server 2022
+runner and skips rebuilding the supplied candidate. It downloads the exact
+2.4.1 draft installer and checksum, checks both installers and the candidate
+source fingerprint, launches the historical UI, upgrades with the original app
+identity, checks retained settings and exact new payload bytes, and uninstalls.
+Evidence is retained as `historical-upgrade-qa`. This harness refuses to run
+locally or over a preexisting real installation. Server acceptance is distinct
+from the Windows 11 desktop acceptance matrix above.

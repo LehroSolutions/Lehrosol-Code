@@ -18,7 +18,8 @@ checks and the distinction between automated checks and installation acceptance.
 
 ## Install and connect
 
-Windows 10/11 x64 is the supported desktop target. Install the desktop installer
+Windows 11 x64 is the supported desktop target. Windows 10 is outside the
+maintained and tested support scope. Install the desktop installer
 from a **published** GitHub Release. A draft is a maintainer candidate and is not
 offered by the application's update check. Windows may display a SmartScreen
 warning for an unsigned installer; verify its source and the release's

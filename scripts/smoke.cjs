@@ -7,13 +7,21 @@ const { join, resolve } = require('node:path');
 const http = require('node:http');
 const assert = require('node:assert/strict');
 const root = resolve(__dirname, '..');
+const option = (name) => {
+  const index = process.argv.indexOf(name);
+  if (index < 0) return null;
+  const value = process.argv[index + 1];
+  if (!value || value.startsWith('--')) throw new Error(`Missing value for ${name}`);
+  return value;
+};
+const packagedDir = resolve(option('--packaged-dir') || join(root, 'dist', 'win-unpacked'));
 const { sourceHashes, fingerprint, sha256 } = require('./source-state.cjs');
 const sourceFingerprint = fingerprint(sourceHashes(root));
-const appAsarSha256 = process.argv.includes('--packaged') ? sha256(readFileSync(join(root, 'dist', 'win-unpacked', 'resources', 'app.asar'))) : null;
-const executableSha256 = process.argv.includes('--packaged') ? sha256(readFileSync(join(root, 'dist', 'win-unpacked', 'Lehrosol Code.exe'))) : null;
+const appAsarSha256 = process.argv.includes('--packaged') ? sha256(readFileSync(join(packagedDir, 'resources', 'app.asar'))) : null;
+const executableSha256 = process.argv.includes('--packaged') ? sha256(readFileSync(join(packagedDir, 'Lehrosol Code.exe'))) : null;
 const version = require('../package.json').version;
 const updateVersion = version.split('.').map((part, index) => index === 2 ? Number(part) + 1 : part).join('.');
-const outputDir = join(root, 'dist', 'qa');
+const outputDir = resolve(option('--qa-dir') || join(root, 'dist', 'qa'));
 mkdirSync(outputDir, { recursive: true });
 const temp = mkdtempSync(join(tmpdir(), 'lehrosol-desktop-smoke-'));
 const project = join(temp, 'project with spaces');
@@ -51,7 +59,7 @@ const record = async (name, fn) => { await fn(); checks.push(name); console.log(
   const port = server.address().port;
   writeFileSync(join(home, 'serve.json'), JSON.stringify({ model: 'smoke-model', port, pid: process.pid }));
   const packaged = process.argv.includes('--packaged');
-  const executablePath = packaged ? join(root, 'dist', 'win-unpacked', 'Lehrosol Code.exe') : require('electron');
+  const executablePath = packaged ? join(packagedDir, 'Lehrosol Code.exe') : require('electron');
   const launchArgs = [...(packaged ? [] : [root]), `--user-data-dir=${join(temp, 'user-data')}`];
   const launch = packaged ? launchPackaged : (options) => _electron.launch({ ...options, timeout: 120000 });
   const env = { ...process.env, LEHRO_HOME: home, LEHROSOL_BIN: cli, LEHRO_MODELS_DIR: temp };
@@ -310,12 +318,12 @@ const record = async (name, fn) => { await fn(); checks.push(name); console.log(
   assert.equal(fingerprint(sourceHashes(root)), sourceFingerprint, 'Application source changed during smoke verification');
   if (packaged) {
     assert.equal(sha256(readFileSync(executablePath)), executableSha256, 'Packaged executable changed during smoke verification');
-    assert.equal(sha256(readFileSync(join(root, 'dist', 'win-unpacked', 'resources', 'app.asar'))), appAsarSha256, 'Packaged archive changed during smoke verification');
+    assert.equal(sha256(readFileSync(join(packagedDir, 'resources', 'app.asar'))), appAsarSha256, 'Packaged archive changed during smoke verification');
   }
-  writeFileSync(join(outputDir, packaged ? 'packaged-smoke.json' : 'source-smoke.json'), JSON.stringify({ ok: true, version: require('../package.json').version, platform: process.platform, packaged, sourceFingerprint, appAsarSha256, executableSha256, checks, errors, engine: 'Synthetic loopback API; no model-quality claim', cli: 'Disposable fixture for application flows', at: new Date().toISOString() }, null, 2));
+  writeFileSync(join(outputDir, packaged ? 'packaged-smoke.json' : 'source-smoke.json'), JSON.stringify({ ok: true, version: require('../package.json').version, platform: process.platform, packaged, packagedDirectory: packaged ? packagedDir : null, sourceFingerprint, appAsarSha256, executableSha256, checks, errors, engine: 'Synthetic loopback API; no model-quality claim', cli: 'Disposable fixture for application flows', at: new Date().toISOString() }, null, 2));
 })().catch((err) => {
   console.error(err); process.exitCode = 1;
-  writeFileSync(join(outputDir, process.argv.includes('--packaged') ? 'packaged-smoke.json' : 'source-smoke.json'), JSON.stringify({ version, platform: process.platform, packaged: process.argv.includes('--packaged'), ok: false, checks, errors: [...errors, err.message], at: new Date().toISOString() }, null, 2));
+  writeFileSync(join(outputDir, process.argv.includes('--packaged') ? 'packaged-smoke.json' : 'source-smoke.json'), JSON.stringify({ version, platform: process.platform, packaged: process.argv.includes('--packaged'), packagedDirectory: process.argv.includes('--packaged') ? packagedDir : null, sourceFingerprint, appAsarSha256, executableSha256, ok: false, checks, errors: [...errors, err.message], at: new Date().toISOString() }, null, 2));
 }).finally(async () => {
   if (app) await app.close().catch(() => {});
   await new Promise((done) => server.close(done));
